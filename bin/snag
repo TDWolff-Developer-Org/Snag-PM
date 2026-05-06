@@ -12,9 +12,9 @@ SNAG_VERSION  = "0.0.1"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
-REGISTRY_URL  = "https://raw.githubusercontent.com/tdwolff-developer-org/snag/main/Formula/registry.json"
+REGISTRY_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/main/Formula/registry.json"
 REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
-SNAG_RAW_URL  = "https://raw.githubusercontent.com/tdwolff-developer-org/snag/main/bin/snag"
+SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/main/bin/snag"
 
 module Color
   RESET  = "\e[0m"
