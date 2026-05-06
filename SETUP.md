@@ -76,7 +76,7 @@ git push
 In a fresh terminal (or a VM):
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_TDWolff-Developer-Org/Snag-PM/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
 source ~/.zshrc   # or ~/.bashrc
 snag list
 snag install hello

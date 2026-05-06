@@ -3,7 +3,7 @@
 A simple, Homebrew-inspired package manager written in Ruby.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
 ```
 
 ## Features
@@ -25,7 +25,7 @@ A simple, Homebrew-inspired package manager written in Ruby.
 ## Installation
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
 ```
 
 The installer:
