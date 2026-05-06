@@ -16,7 +16,7 @@
       "description": "Instantly serve any directory over HTTP — like python -m http.server but better",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/quickserve-1.0.0/quickserve-1.0.0.tar.gz",
-      "sha256": "4b4f0fc69f554037cc455a23fe24a23abf3440139c153f5df00357c30a3704a3"
+      "sha256": "d2e7319486edbbfca05e38a7a693a6f3e5f6bc899169c7ff293a1d1a8d76a1dd"
     },
     "colorcat": {
       "name": "colorcat",
@@ -24,7 +24,7 @@
       "description": "Like cat, but with basic syntax highlighting for Ruby, Python, JS, Shell, and JSON",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/colorcat-1.0.0/colorcat-1.0.0.tar.gz",
-      "sha256": "c7ef2a828fe01891615d0e67384c6d798e709d5e3cf57d5cd4282f2cfb3f2aa6"
+      "sha256": "9a3477f8c6b2311de9f90cadf05bf13d882d8b9c53520a496768bbb67b209965"
     }
   }
 }
