@@ -8,7 +8,7 @@
       "description": "A friendly greeting program — the classic Hello, World!",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
-      "sha256": "1a92e29331529f2055161877f053c643a727b4409f8a2330ea3ae7ae0f8c1a42"
+      "sha256": "cf85350c0612baa3f926389d13c8cf7c67ecd87f67dd8d00575bce795b60738a"
     },
     "quickserve": {
       "name": "quickserve",
@@ -16,7 +16,7 @@
       "description": "Instantly serve any directory over HTTP — like python -m http.server but better",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/quickserve-1.0.0/quickserve-1.0.0.tar.gz",
-      "sha256": "ea097edac0a2029afc26ad382855ba536334f54428fe3ae8f8ac46757ec9cfc3"
+      "sha256": "4b4f0fc69f554037cc455a23fe24a23abf3440139c153f5df00357c30a3704a3"
     },
     "colorcat": {
       "name": "colorcat",
@@ -24,7 +24,7 @@
       "description": "Like cat, but with basic syntax highlighting for Ruby, Python, JS, Shell, and JSON",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/colorcat-1.0.0/colorcat-1.0.0.tar.gz",
-      "sha256": "7bf907b143a1f5ee9fbb4da2723c4c6cc978cf1137fb0603afc4405e41098141"
+      "sha256": "c7ef2a828fe01891615d0e67384c6d798e709d5e3cf57d5cd4282f2cfb3f2aa6"
     }
   }
 }
