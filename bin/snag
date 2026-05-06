@@ -276,6 +276,84 @@ def cmd_info(name)
   puts
 end
 
+def cmd_outdated
+  packages = load_registry
+  if packages.empty?
+    warn "Registry empty. Run 'snag update'."
+    return
+  end
+
+  unless Dir.exist?(SNAG_CELLAR)
+    puts "Nothing installed yet."
+    return
+  end
+
+  outdated = Dir.children(SNAG_CELLAR).sort.filter_map do |name|
+    next unless packages.key?(name)
+    current = installed_version(name)
+    latest  = packages[name]["version"]
+    next if current == latest
+    { name: name, current: current, latest: latest }
+  end
+
+  if outdated.empty?
+    ok "All packages are up to date."
+    return
+  end
+
+  puts "#{Color.bold("Outdated packages:")} (#{outdated.size})"
+  puts
+  outdated.each do |pkg|
+    puts "  #{Color.cyan(pkg[:name].ljust(18))} #{Color.yellow(pkg[:current])} → #{Color.green(pkg[:latest])}"
+  end
+  puts
+  puts "  Run #{Color.cyan("snag upgrade")} to update all, or #{Color.cyan("snag upgrade <package>")} for one."
+  puts
+end
+
+def cmd_upgrade(name = nil)
+  packages = load_registry
+  if packages.empty?
+    warn "Registry empty. Run 'snag update' first."
+    return
+  end
+
+  targets = if name
+    unless packages.key?(name)
+      error "Package '#{name}' not found."
+      exit 1
+    end
+    [name]
+  else
+    Dir.exist?(SNAG_CELLAR) ? Dir.children(SNAG_CELLAR).select { |d| packages.key?(d) }.sort : []
+  end
+
+  if targets.empty?
+    puts "Nothing installed yet."
+    return
+  end
+
+  upgraded = 0
+  targets.each do |pkg_name|
+    current = installed_version(pkg_name)
+    latest  = packages[pkg_name]["version"]
+
+    if current == latest
+      ok "#{pkg_name} #{current} is already up to date."
+      next
+    end
+
+    puts
+    step "Upgrading #{Color.bold(pkg_name)} #{Color.yellow(current)} → #{Color.green(latest)}"
+    cmd_uninstall(pkg_name)
+    cmd_install(pkg_name)
+    upgraded += 1
+  end
+
+  puts
+  ok "#{upgraded} package(s) upgraded." if upgraded > 0
+end
+
 def cmd_update
   step "Updating package registry"
   ensure_dirs
@@ -325,6 +403,8 @@ def cmd_help
   cmds = [
     ["install <package>",   "Download and install a package"],
     ["uninstall <package>", "Remove an installed package"],
+    ["upgrade [package]",   "Upgrade one package or all installed packages"],
+    ["outdated",            "Show installed packages with newer versions available"],
     ["list",                "List all available packages"],
     ["installed",           "Show what's installed"],
     ["search <query>",      "Search packages by name or description"],
@@ -363,7 +443,11 @@ when "search"
   argument ? cmd_search(argument) : (error "Usage: snag search <query>"; exit 1)
 when "info"
   argument ? cmd_info(argument) : (error "Usage: snag info <package>"; exit 1)
-when "update", "upgrade"
+when "upgrade"
+  cmd_upgrade(argument)
+when "outdated"
+  cmd_outdated
+when "update"
   cmd_update
 when "version", "--version", "-v"
   cmd_version
