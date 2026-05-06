@@ -116,8 +116,14 @@ fi
 echo
 echo -e "  ${GREEN}${BOLD}Snag installed successfully!${RESET}"
 echo
-echo -e "  Next steps:"
-echo -e "    1. Reload your shell:  ${CYAN}source ~/.${CURRENT_SHELL}rc${RESET}   (or open a new terminal)"
-echo -e "    2. List packages:      ${CYAN}snag list${RESET}"
-echo -e "    3. Install something:  ${CYAN}snag install hello${RESET}"
+echo -e "  ${BOLD}To use snag right now${RESET} (in this terminal window):"
+echo -e "    ${CYAN}export PATH=\"\$HOME/.snag/bin:\$PATH\"${RESET}"
+echo
+echo -e "  ${BOLD}To make it permanent${RESET}, reload your shell config:"
+echo -e "    ${CYAN}source ~/.${CURRENT_SHELL}rc${RESET}   (or open a new terminal)"
+echo
+echo -e "  Then try:"
+echo -e "    ${CYAN}snag list${RESET}"
+echo -e "    ${CYAN}snag install hello${RESET}"
+echo -e "    ${CYAN}hello${RESET}"
 echo
