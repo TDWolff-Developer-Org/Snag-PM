@@ -1,0 +1,30 @@
+{
+  "version": "1",
+  "updated": "2026-05-06",
+  "packages": {
+    "hello": {
+      "name": "hello",
+      "version": "1.0.0",
+      "description": "A friendly greeting program — the classic Hello, World!",
+      "homepage": "https://github.com/tdwolff-developer-org/snag",
+      "url": "https://github.com/tdwolff-developer-org/snag/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
+      "sha256": "4a15bad4aa67ee2487a7386984b587736dd167e896b5a3abf7d9591a8a2d3a62"
+    },
+    "quickserve": {
+      "name": "quickserve",
+      "version": "1.0.0",
+      "description": "Instantly serve any directory over HTTP — like python -m http.server but better",
+      "homepage": "https://github.com/tdwolff-developer-org/snag",
+      "url": "https://github.com/tdwolff-developer-org/snag/releases/download/quickserve-1.0.0/quickserve-1.0.0.tar.gz",
+      "sha256": "a56e6f535106c677a189b2db0c74f4aa6533c735d1e71d3bbad035d02fb96fd5"
+    },
+    "colorcat": {
+      "name": "colorcat",
+      "version": "1.0.0",
+      "description": "Like cat, but with basic syntax highlighting for Ruby, Python, JS, Shell, and JSON",
+      "homepage": "https://github.com/tdwolff-developer-org/snag",
+      "url": "https://github.com/tdwolff-developer-org/snag/releases/download/colorcat-1.0.0/colorcat-1.0.0.tar.gz",
+      "sha256": "5dce3050be1215fa993ff0091bfa5950637e3e70bb573c9c8c21905610d99bc5"
+    }
+  }
+}
