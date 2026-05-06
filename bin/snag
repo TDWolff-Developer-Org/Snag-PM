@@ -43,11 +43,15 @@ def ensure_dirs
   [SNAG_HOME, SNAG_BIN, SNAG_CELLAR].each { |d| FileUtils.mkdir_p(d) }
 end
 
+NO_CACHE_HEADERS = { "Cache-Control" => "no-cache", "Pragma" => "no-cache" }.freeze
+
 def fetch_url(url, limit = 5)
   raise "Too many redirects" if limit == 0
   uri = URI.parse(url)
   response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-    http.get(uri.request_uri)
+    req = Net::HTTP::Get.new(uri.request_uri)
+    NO_CACHE_HEADERS.each { |k, v| req[k] = v }
+    http.request(req)
   end
   case response.code
   when "200" then response.body
@@ -363,7 +367,7 @@ def cmd_update
   ensure_dirs
 
   begin
-    body = fetch_url("#{REGISTRY_URL}?_=#{Time.now.to_i}")
+    body = fetch_url(REGISTRY_URL)
     parsed = JSON.parse(body)
     pkg_count = parsed["packages"]&.size || 0
     File.write(REGISTRY_PATH, body)
@@ -376,7 +380,7 @@ def cmd_update
   puts
   step "Checking for snag updates"
   begin
-    remote = fetch_url("#{SNAG_RAW_URL}?_=#{Time.now.to_i}")
+    remote = fetch_url(SNAG_RAW_URL)
     local  = File.exist?(__FILE__) ? File.read(__FILE__) : ""
     if remote == local
       ok "snag is up to date"
