@@ -124,6 +124,6 @@ echo -e "    ${CYAN}source ~/.${CURRENT_SHELL}rc${RESET}   (or open a new termin
 echo
 echo -e "  Then try:"
 echo -e "    ${CYAN}snag list${RESET}"
-echo -e "    ${CYAN}snag install hello${RESET}"
-echo -e "    ${CYAN}hello${RESET}"
+echo -e "    ${CYAN}snag install myip${RESET}"
+echo -e "    ${CYAN}myip${RESET}"
 echo
