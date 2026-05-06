@@ -208,36 +208,18 @@ def cmd_uninstall(name)
 end
 
 def cmd_list
-  packages = load_registry
-  if packages.empty?
-    warn "No packages in registry. Run 'snag update'."
-    return
-  end
-
-  puts "#{Color.bold("Available packages:")} (#{packages.size} total)"
-  puts
-
-  packages.sort_by { |k, _| k }.each do |name, pkg|
-    installed = installed_version(name)
-    tag = installed ? Color.green(" [installed #{installed}]") : ""
-    puts "  #{Color.cyan(name.ljust(18))} #{pkg["version"].ljust(10)} #{pkg["description"]}#{tag}"
-  end
-  puts
-end
-
-def cmd_installed
   unless Dir.exist?(SNAG_CELLAR)
-    puts "Nothing installed yet. Try 'snag list'."
+    puts "Nothing installed yet. Try 'snag search' or 'snag info <package>'."
     return
   end
 
   pkgs = Dir.children(SNAG_CELLAR).select { |d| Dir.exist?(File.join(SNAG_CELLAR, d)) }.sort
   if pkgs.empty?
-    puts "Nothing installed yet. Try 'snag list'."
+    puts "Nothing installed yet. Try 'snag search' or 'snag info <package>'."
     return
   end
 
-  puts Color.bold("Installed packages:")
+  puts "#{Color.bold("Installed packages:")} (#{pkgs.size} total)"
   puts
   pkgs.each do |name|
     v = installed_version(name)
@@ -524,8 +506,7 @@ def cmd_help
     ["uninstall <package>", "Remove an installed package"],
     ["upgrade [package]",   "Upgrade one package or all installed packages"],
     ["outdated",            "Show installed packages with newer versions available"],
-    ["list",                "List all available packages"],
-    ["installed",           "Show what's installed"],
+    ["list",                "List installed packages"],
     ["search <query>",      "Search packages by name or description"],
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
@@ -558,8 +539,6 @@ when "uninstall", "remove", "rm"
   argument ? cmd_uninstall(argument) : (error "Usage: snag uninstall <package>"; exit 1)
 when "list", "ls"
   cmd_list
-when "installed"
-  cmd_installed
 when "search"
   argument ? cmd_search(argument) : (error "Usage: snag search <query>"; exit 1)
 when "info"
