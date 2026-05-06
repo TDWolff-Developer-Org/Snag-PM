@@ -338,6 +338,14 @@ def cmd_upgrade(name = nil)
     current = installed_version(pkg_name)
     latest  = packages[pkg_name]["version"]
 
+    if current.nil?
+      puts
+      step "Installing #{Color.bold(pkg_name)} #{Color.green(latest)} (not yet installed)"
+      cmd_install(pkg_name)
+      upgraded += 1
+      next
+    end
+
     if current == latest
       ok "#{pkg_name} #{current} is already up to date."
       next
