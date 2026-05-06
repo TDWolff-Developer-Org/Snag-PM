@@ -367,7 +367,7 @@ def cmd_update
   ensure_dirs
 
   begin
-    body = fetch_url(REGISTRY_URL)
+    body = fetch_url("#{REGISTRY_URL}?_=#{Time.now.to_i}")
     parsed = JSON.parse(body)
     pkg_count = parsed["packages"]&.size || 0
     File.write(REGISTRY_PATH, body)
@@ -380,7 +380,7 @@ def cmd_update
   puts
   step "Checking for snag updates"
   begin
-    remote = fetch_url(SNAG_RAW_URL)
+    remote = fetch_url("#{SNAG_RAW_URL}?_=#{Time.now.to_i}")
     local  = File.exist?(__FILE__) ? File.read(__FILE__) : ""
     if remote == local
       ok "snag is up to date"
