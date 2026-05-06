@@ -612,10 +612,10 @@ def cmd_help
   end
   puts
   puts "  #{Color.bold("Examples:")}"
-  puts "    snag install hello"
-  puts "    snag install hello@1.0.0"
-  puts "    snag search server"
-  puts "    snag info quickserve"
+  puts "    snag install myip"
+  puts "    snag install snagtools"
+  puts "    snag search ip"
+  puts "    snag info snagtools"
   puts "    snag update"
   puts
 end
