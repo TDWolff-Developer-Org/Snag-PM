@@ -8,7 +8,7 @@
       "description": "A friendly greeting program — the classic Hello, World!",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
-      "sha256": "cf85350c0612baa3f926389d13c8cf7c67ecd87f67dd8d00575bce795b60738a"
+      "sha256": "01e9bd16a92521808dc326cbc5b46fd83a337568c029562c8c5c79c29499d6ab"
     },
     "quickserve": {
       "name": "quickserve",

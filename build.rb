@@ -75,6 +75,9 @@ targets.each do |pkg_name|
       ok "Staged #{fname}"
     end
 
+    # Fix all timestamps to epoch so the tarball SHA is reproducible across runs
+    Dir.glob(File.join(stage, "**", "*")).each { |f| File.utime(0, 0, f) }
+
     system("tar", "-czf", archive_path, "-C", tmp, stage_name, exception: true)
   end
 
