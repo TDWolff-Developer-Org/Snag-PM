@@ -1,0 +1,294 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+RESET  = "\e[0m"
+BOLD   = "\e[1m"
+DIM    = "\e[2m"
+RED    = "\e[31m"
+GREEN  = "\e[32m"
+YELLOW = "\e[33m"
+BLUE   = "\e[34m"
+CYAN   = "\e[36m"
+MAGENTA = "\e[35m"
+WHITE  = "\e[37m"
+
+SNAGTOOLS_VERSION = "1.0.0"
+
+def die(msg)
+  $stderr.puts "#{RED}✗#{RESET} #{msg}"
+  exit 1
+end
+
+# ── cat ────────────────────────────────────────────────────────────────────────
+
+LANG_BY_EXT = {
+  /\.rb$/        => :ruby,
+  /\.py$/        => :python,
+  /\.js$/        => :javascript,
+  /\.ts$/        => :typescript,
+  /\.sh$/        => :shell,
+  /\.bash$/      => :shell,
+  /\.zsh$/       => :shell,
+  /\.json$/      => :json,
+  /\.ya?ml$/     => :yaml,
+  /\.html?$/     => :html,
+  /\.css$/       => :css,
+  /\.diff$/      => :diff,
+  /\.patch$/     => :diff,
+  /\.md$/        => :markdown,
+  /\.sql$/       => :sql,
+  /\.rs$/        => :rust,
+  /\.go$/        => :go,
+  /\.c$/         => :c,
+  /\.cpp$/       => :c,
+  /\.h$/         => :c,
+}
+
+COMMENT_RE = {
+  ruby:       /#[^!].*/,
+  python:     /#.*/,
+  javascript: /\/\/.*/,
+  typescript: /\/\/.*/,
+  shell:      /#[^!].*/,
+  yaml:       /#.*/,
+  sql:        /--[^\n]*/,
+  rust:       /\/\/.*/,
+  go:         /\/\/.*/,
+  c:          /\/\/.*/,
+}
+
+KEYWORD_RE = {
+  ruby:       /\b(def|end|class|module|if|elsif|else|unless|case|when|while|until|for|do|begin|rescue|ensure|raise|return|yield|require|require_relative|include|extend|prepend|attr_accessor|attr_reader|attr_writer|true|false|nil|self|super|puts|print|p)\b/,
+  python:     /\b(def|class|if|elif|else|for|while|return|import|from|try|except|finally|with|as|pass|break|continue|lambda|yield|True|False|None|and|or|not|in|is|print)\b/,
+  javascript: /\b(function|var|let|const|if|else|for|while|do|return|import|export|default|class|new|delete|typeof|instanceof|true|false|null|undefined|async|await|switch|case|break|continue|throw|try|catch|finally|console)\b/,
+  typescript: /\b(function|var|let|const|if|else|for|while|do|return|import|export|default|class|new|delete|typeof|instanceof|true|false|null|undefined|async|await|switch|case|break|continue|throw|try|catch|finally|interface|type|enum|implements|extends|public|private|protected|readonly)\b/,
+  shell:      /\b(if|then|else|elif|fi|for|in|do|done|while|until|case|esac|function|return|exit|echo|local|readonly|export|source|shift|set|unset)\b/,
+  sql:        /\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|IN|IS|NULL|LIKE|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|DISTINCT|COUNT|SUM|AVG|MAX|MIN)\b/i,
+  rust:       /\b(fn|let|mut|if|else|match|for|while|loop|return|use|mod|pub|struct|enum|impl|trait|where|type|const|static|true|false|self|Self|super|crate)\b/,
+  go:         /\b(func|var|const|type|if|else|for|range|return|import|package|struct|interface|map|chan|go|defer|select|case|default|break|continue|true|false|nil)\b/,
+  c:          /\b(int|char|float|double|void|if|else|for|while|do|return|include|define|struct|typedef|enum|static|const|unsigned|signed|long|short|break|continue|switch|case|default|NULL|true|false)\b/,
+}
+
+NUMBER_RE  = /\b\d+(\.\d+)?\b/
+STRING_RE  = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/
+
+def detect_lang(path)
+  LANG_BY_EXT.each { |re, lang| return lang if path.match?(re) }
+  first_line = File.open(path, &:readline) rescue ""
+  return :ruby   if first_line.include?("ruby")
+  return :python if first_line.include?("python")
+  return :shell  if first_line.include?("bash") || first_line.include?("zsh") || first_line.include?(" sh")
+  nil
+end
+
+def highlight(line, lang)
+  return "#{GREEN}#{line}#{RESET}" if lang == :diff && line.start_with?("+") && !line.start_with?("+++")
+  return "#{RED}#{line}#{RESET}"   if lang == :diff && line.start_with?("-") && !line.start_with?("---")
+  return "#{CYAN}#{line}#{RESET}"  if lang == :diff && line.start_with?("@@")
+  return "#{BOLD}#{line}#{RESET}"  if lang == :diff && line.start_with?("diff", "index", "---", "+++")
+
+  if lang == :markdown
+    return "#{BOLD}#{YELLOW}#{line}#{RESET}" if line.match?(/^#{1,6}\s/)
+    return "#{DIM}#{line}#{RESET}"           if line.match?(/^[\-\*]\s|^\d+\.\s/)
+  end
+
+  result = line.gsub(STRING_RE) { "#{YELLOW}#{$&}#{RESET}" }
+  result = result.gsub(KEYWORD_RE[lang]) { "#{CYAN}#{$&}#{RESET}" } if KEYWORD_RE[lang]
+  result = result.gsub(NUMBER_RE)        { "#{MAGENTA}#{$&}#{RESET}" }
+  result = result.gsub(COMMENT_RE[lang]) { "#{DIM}#{GREEN}#{$&}#{RESET}" } if COMMENT_RE[lang]
+  result
+end
+
+def lang_label(lang)
+  {
+    ruby: "Ruby", python: "Python", javascript: "JavaScript", typescript: "TypeScript",
+    shell: "Shell", json: "JSON", yaml: "YAML", html: "HTML", css: "CSS",
+    diff: "Diff", markdown: "Markdown", sql: "SQL", rust: "Rust", go: "Go", c: "C/C++"
+  }[lang] || lang.to_s.capitalize
+end
+
+def cmd_cat(args)
+  line_numbers = args.delete("-n") || args.delete("--numbers")
+  plain        = args.delete("--plain")
+  files        = args
+
+  if files.empty?
+    $stdin.each_line { |l| print l }
+    return
+  end
+
+  files.each do |file|
+    die "#{file}: No such file" unless File.exist?(file)
+    die "#{file}: Is a directory" if File.directory?(file)
+
+    lang = plain ? nil : detect_lang(file)
+    lines = File.readlines(file)
+
+    # Header
+    lang_tag = lang ? " #{DIM}[#{lang_label(lang)}]#{RESET}" : ""
+    puts "#{BOLD}#{BLUE}┌─ #{file}#{RESET}#{lang_tag}"
+
+    lines.each_with_index do |line, i|
+      num = line_numbers ? "#{DIM}#{(i + 1).to_s.rjust(4)}  #{RESET}" : ""
+      content = lang ? highlight(line, lang) : line
+      print "#{num}#{content}"
+    end
+
+    puts "#{DIM}└─ #{lines.size} line#{lines.size == 1 ? "" : "s"}#{RESET}"
+    puts if files.size > 1
+  end
+end
+
+# ── json ───────────────────────────────────────────────────────────────────────
+
+def colorize_json(obj, indent = 0)
+  pad = "  " * indent
+  case obj
+  when Hash
+    return "{}" if obj.empty?
+    lines = obj.map do |k, v|
+      "#{pad}  #{CYAN}\"#{k}\"#{RESET}: #{colorize_json(v, indent + 1)}"
+    end
+    "{\n#{lines.join(",\n")}\n#{pad}}"
+  when Array
+    return "[]" if obj.empty?
+    lines = obj.map { |v| "#{pad}  #{colorize_json(v, indent + 1)}" }
+    "[\n#{lines.join(",\n")}\n#{pad}]"
+  when String
+    "#{YELLOW}\"#{obj.gsub('"', '\\"')}\"#{RESET}"
+  when Integer, Float
+    "#{MAGENTA}#{obj}#{RESET}"
+  when TrueClass, FalseClass
+    "#{GREEN}#{obj}#{RESET}"
+  when NilClass
+    "#{DIM}null#{RESET}"
+  end
+end
+
+def cmd_json(args)
+  compact   = args.delete("-c") || args.delete("--compact")
+  validate  = args.delete("--validate")
+  file      = args.first
+
+  raw = if file
+    die "#{file}: No such file" unless File.exist?(file)
+    File.read(file)
+  else
+    $stdin.read
+  end
+
+  begin
+    parsed = JSON.parse(raw)
+  rescue JSON::ParserError => e
+    die "Invalid JSON: #{e.message}"
+  end
+
+  if validate
+    puts "#{GREEN}✓#{RESET} Valid JSON"
+    puts "  Keys at root : #{parsed.is_a?(Hash) ? parsed.keys.size : "N/A (array)"}"
+    puts "  Items        : #{parsed.is_a?(Array) ? parsed.size : "N/A (object)"}"
+    return
+  end
+
+  if compact
+    puts parsed.to_json
+  else
+    puts colorize_json(parsed)
+  end
+end
+
+# ── hex ────────────────────────────────────────────────────────────────────────
+
+def cmd_hex(args)
+  width = 16
+  file  = args.first
+
+  bytes = if file
+    die "#{file}: No such file" unless File.exist?(file)
+    die "#{file}: Is a directory" if File.directory?(file)
+    File.binread(file).bytes
+  else
+    $stdin.binmode.read.bytes
+  end
+
+  puts "#{BOLD}#{BLUE}┌─ #{file || "stdin"} #{DIM}(#{bytes.size} bytes)#{RESET}"
+  puts
+
+  bytes.each_slice(width).each_with_index do |chunk, row|
+    offset = "#{DIM}#{(row * width).to_s(16).rjust(8, "0")}#{RESET}"
+
+    hex_part = chunk.each_slice(8).map { |group|
+      group.map { |b|
+        color = case b
+        when 0             then DIM
+        when 32..126       then WHITE
+        when 1..31, 127    then RED
+        else YELLOW
+        end
+        "#{color}#{b.to_s(16).rjust(2, "0")}#{RESET}"
+      }.join(" ")
+    }.join("  ")
+
+    # Pad last row
+    total_hex_width = width * 3 + 1
+    hex_padded = hex_part + (" " * [0, total_hex_width - chunk.size * 3].max)
+
+    ascii = chunk.map { |b| b.between?(32, 126) ? "#{CYAN}#{b.chr}#{RESET}" : "#{DIM}.#{RESET}" }.join
+
+    puts "  #{offset}  #{hex_padded}  #{DIM}|#{RESET}#{ascii}#{DIM}|#{RESET}"
+  end
+
+  puts
+  puts "#{DIM}└─ #{bytes.size} bytes#{RESET}"
+end
+
+# ── help ───────────────────────────────────────────────────────────────────────
+
+def cmd_help
+  puts
+  puts "  #{BOLD}#{CYAN}snagtools#{RESET} #{SNAGTOOLS_VERSION} — a suite of developer utilities"
+  puts
+  puts "  #{BOLD}Usage:#{RESET} snagtools <tool> [options] [file]"
+  puts
+  puts "  #{BOLD}Tools:#{RESET}"
+  puts "    #{CYAN}cat#{RESET}  [options] <file...>   Syntax-highlighted file viewer"
+  puts "         #{DIM}-n, --numbers#{RESET}           Show line numbers"
+  puts "         #{DIM}--plain#{RESET}                 No highlighting (plain output)"
+  puts
+  puts "    #{CYAN}json#{RESET} [options] [file]       Pretty-print and validate JSON"
+  puts "         #{DIM}-c, --compact#{RESET}           Compact single-line output"
+  puts "         #{DIM}--validate#{RESET}              Validate only, no output"
+  puts
+  puts "    #{CYAN}hex#{RESET}  [file]                 Hex dump of any file"
+  puts
+  puts "  #{BOLD}Examples:#{RESET}"
+  puts "    snagtools cat -n myfile.rb"
+  puts "    snagtools cat file.diff"
+  puts "    cat file.json | snagtools json"
+  puts "    snagtools json --validate data.json"
+  puts "    snagtools hex /usr/bin/ruby"
+  puts "    curl -s https://api.example.com | snagtools json"
+  puts
+end
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+require 'json'
+
+tool = ARGV.shift
+
+case tool
+when "cat"
+  cmd_cat(ARGV.dup)
+when "json"
+  cmd_json(ARGV.dup)
+when "hex"
+  cmd_hex(ARGV.dup)
+when "version", "--version", "-v"
+  puts "snagtools #{SNAGTOOLS_VERSION}"
+when "help", "--help", "-h", nil
+  cmd_help
+else
+  $stderr.puts "#{RED}✗#{RESET} Unknown tool '#{tool}'. Run 'snagtools help'."
+  exit 1
+end

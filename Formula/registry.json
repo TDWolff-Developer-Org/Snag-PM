@@ -2,14 +2,6 @@
   "version": "1",
   "updated": "2026-05-06",
   "packages": {
-    "colorcat": {
-      "name": "colorcat",
-      "version": "1.0.0",
-      "description": "Like cat, but with basic syntax highlighting for Ruby, Python, JS, Shell, and JSON",
-      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/colorcat-1.0.0/colorcat-1.0.0.tar.gz",
-      "sha256": "9a3477f8c6b2311de9f90cadf05bf13d882d8b9c53520a496768bbb67b209965"
-    },
     "myip": {
       "name": "myip",
       "version": "1.0.0",
@@ -17,6 +9,14 @@
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/myip-1.0.0/myip-1.0.0.tar.gz",
       "sha256": "46d418212fb206755ee31eac6b2cfc893ad97997580e04b8ecd043d0ed9e681e"
+    },
+    "snagtools": {
+      "name": "snagtools",
+      "version": "1.0.0",
+      "description": "Developer toolkit — syntax-highlighted cat, JSON pretty-printer, and hex dump",
+      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
+      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/snagtools-1.0.0/snagtools-1.0.0.tar.gz",
+      "sha256": "e4ea64f7cf9da51fede53fc6689867f564bdb622f48c9ca9cb08b91d58c82b1a"
     }
   }
 }
