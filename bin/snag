@@ -1,0 +1,375 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'net/http'
+require 'json'
+require 'fileutils'
+require 'digest'
+require 'uri'
+require 'tmpdir'
+
+SNAG_VERSION  = "0.0.1"
+SNAG_HOME     = File.expand_path("~/.snag")
+SNAG_BIN      = File.join(SNAG_HOME, "bin")
+SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
+REGISTRY_URL  = "https://raw.githubusercontent.com/tdwolff-developer-org/snag/main/Formula/registry.json"
+REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
+SNAG_RAW_URL  = "https://raw.githubusercontent.com/tdwolff-developer-org/snag/main/bin/snag"
+
+module Color
+  RESET  = "\e[0m"
+  RED    = "\e[31m"
+  GREEN  = "\e[32m"
+  YELLOW = "\e[33m"
+  BLUE   = "\e[34m"
+  CYAN   = "\e[36m"
+  BOLD   = "\e[1m"
+
+  def self.red(s)    = "#{RED}#{s}#{RESET}"
+  def self.green(s)  = "#{GREEN}#{s}#{RESET}"
+  def self.yellow(s) = "#{YELLOW}#{s}#{RESET}"
+  def self.blue(s)   = "#{BLUE}#{s}#{RESET}"
+  def self.cyan(s)   = "#{CYAN}#{s}#{RESET}"
+  def self.bold(s)   = "#{BOLD}#{s}#{RESET}"
+end
+
+def step(msg)  = puts("#{Color.blue("==>")} #{Color.bold(msg)}")
+def ok(msg)    = puts("#{Color.green("✓")} #{msg}")
+def warn(msg)  = puts("#{Color.yellow("⚠")} #{msg}")
+def error(msg) = puts("#{Color.red("✗")} #{msg}")
+def info(msg)  = puts("  #{msg}")
+
+def ensure_dirs
+  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR].each { |d| FileUtils.mkdir_p(d) }
+end
+
+def fetch_url(url, limit = 5)
+  raise "Too many redirects" if limit == 0
+  uri = URI.parse(url)
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    http.get(uri.request_uri)
+  end
+  case response.code
+  when "200" then response.body
+  when "301", "302", "307", "308" then fetch_url(response['location'], limit - 1)
+  else raise "HTTP #{response.code}: #{url}"
+  end
+end
+
+def download_file(url, dest, limit = 5)
+  raise "Too many redirects" if limit == 0
+  uri = URI.parse(url)
+  Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+    http.request(Net::HTTP::Get.new(uri.request_uri)) do |response|
+      case response.code
+      when "301", "302", "307", "308"
+        return download_file(response['location'], dest, limit - 1)
+      when "200"
+        File.open(dest, 'wb') { |f| response.read_body { |chunk| f.write(chunk) } }
+      else
+        raise "HTTP #{response.code}: #{url}"
+      end
+    end
+  end
+end
+
+def verify_sha256(path, expected)
+  step "Verifying SHA256"
+  actual = Digest::SHA256.file(path).hexdigest
+  if actual == expected
+    ok "SHA256 verified"
+    true
+  else
+    error "SHA256 mismatch!"
+    info "Expected: #{expected}"
+    info "Got:      #{actual}"
+    false
+  end
+end
+
+def load_registry
+  unless File.exist?(REGISTRY_PATH)
+    warn "Registry not found. Run 'snag update' to fetch it."
+    return {}
+  end
+  JSON.parse(File.read(REGISTRY_PATH))["packages"] || {}
+rescue JSON::ParserError
+  error "Registry is corrupted. Run 'snag update'."
+  {}
+end
+
+def installed_version(name)
+  dir = File.join(SNAG_CELLAR, name)
+  return nil unless Dir.exist?(dir)
+  versions = Dir.children(dir).sort
+  versions.last
+end
+
+def install_path(name, version)
+  File.join(SNAG_CELLAR, name, version)
+end
+
+# --- Commands ---
+
+def cmd_install(name)
+  packages = load_registry
+  unless packages.key?(name)
+    error "Package '#{name}' not found. Try 'snag search #{name}' or 'snag list'."
+    exit 1
+  end
+
+  pkg     = packages[name]
+  version = pkg["version"]
+  existing = installed_version(name)
+
+  if existing == version
+    ok "#{name} #{version} is already installed."
+    return
+  end
+
+  step "Installing #{Color.bold(name)} #{version}"
+  info pkg["description"]
+  puts
+
+  ensure_dirs
+  dest_dir = install_path(name, version)
+  FileUtils.mkdir_p(dest_dir)
+
+  Dir.mktmpdir do |tmp|
+    tarball = File.join(tmp, "#{name}-#{version}.tar.gz")
+    download_file(pkg["url"], tarball)
+    puts
+
+    unless verify_sha256(tarball, pkg["sha256"])
+      FileUtils.rm_rf(dest_dir)
+      exit 1
+    end
+
+    step "Extracting"
+    result = system("tar", "-xzf", tarball, "-C", dest_dir, "--strip-components=1")
+    unless result
+      error "Extraction failed."
+      FileUtils.rm_rf(dest_dir)
+      exit 1
+    end
+    ok "Extracted to #{dest_dir}"
+  end
+
+  bin_dir = File.join(dest_dir, "bin")
+  if Dir.exist?(bin_dir)
+    Dir.each_child(bin_dir) do |bin|
+      src  = File.join(bin_dir, bin)
+      link = File.join(SNAG_BIN, bin)
+      FileUtils.chmod(0o755, src)
+      FileUtils.ln_sf(src, link)
+      ok "Linked #{Color.cyan(bin)} → #{SNAG_BIN}/"
+    end
+  end
+
+  puts
+  ok "#{Color.bold(name)} #{version} installed successfully!"
+end
+
+def cmd_uninstall(name)
+  version = installed_version(name)
+  unless version
+    error "#{name} is not installed."
+    exit 1
+  end
+
+  step "Uninstalling #{Color.bold(name)} #{version}"
+  dest_dir = install_path(name, version)
+
+  bin_dir = File.join(dest_dir, "bin")
+  if Dir.exist?(bin_dir)
+    Dir.each_child(bin_dir) do |bin|
+      link = File.join(SNAG_BIN, bin)
+      FileUtils.rm_f(link)
+      ok "Removed #{bin}"
+    end
+  end
+
+  FileUtils.rm_rf(File.join(SNAG_CELLAR, name))
+  ok "#{Color.bold(name)} uninstalled."
+end
+
+def cmd_list
+  packages = load_registry
+  if packages.empty?
+    warn "No packages in registry. Run 'snag update'."
+    return
+  end
+
+  puts "#{Color.bold("Available packages:")} (#{packages.size} total)"
+  puts
+
+  packages.sort_by { |k, _| k }.each do |name, pkg|
+    installed = installed_version(name)
+    tag = installed ? Color.green(" [installed #{installed}]") : ""
+    puts "  #{Color.cyan(name.ljust(18))} #{pkg["version"].ljust(10)} #{pkg["description"]}#{tag}"
+  end
+  puts
+end
+
+def cmd_installed
+  unless Dir.exist?(SNAG_CELLAR)
+    puts "Nothing installed yet. Try 'snag list'."
+    return
+  end
+
+  pkgs = Dir.children(SNAG_CELLAR).select { |d| Dir.exist?(File.join(SNAG_CELLAR, d)) }.sort
+  if pkgs.empty?
+    puts "Nothing installed yet. Try 'snag list'."
+    return
+  end
+
+  puts Color.bold("Installed packages:")
+  puts
+  pkgs.each do |name|
+    v = installed_version(name)
+    puts "  #{Color.cyan(name.ljust(18))} #{v}"
+  end
+  puts
+end
+
+def cmd_search(query)
+  packages = load_registry
+  results = packages.select do |name, pkg|
+    name.downcase.include?(query.downcase) ||
+      pkg["description"].downcase.include?(query.downcase)
+  end
+
+  if results.empty?
+    warn "No packages matching '#{query}'."
+    return
+  end
+
+  puts "#{Color.bold("Search results for '#{query}':")} (#{results.size} found)"
+  puts
+  results.sort_by { |k, _| k }.each do |name, pkg|
+    installed = installed_version(name)
+    tag = installed ? Color.green(" [installed]") : ""
+    puts "  #{Color.cyan(name.ljust(18))} #{pkg["version"].ljust(10)} #{pkg["description"]}#{tag}"
+  end
+  puts
+end
+
+def cmd_info(name)
+  packages = load_registry
+  unless packages.key?(name)
+    error "Package '#{name}' not found."
+    exit 1
+  end
+
+  pkg       = packages[name]
+  installed = installed_version(name)
+
+  puts
+  puts "  #{Color.bold(Color.cyan(name))}"
+  puts "  #{"─" * [name.length, 30].min}"
+  puts "  Description : #{pkg["description"]}"
+  puts "  Version     : #{pkg["version"]}"
+  puts "  Homepage    : #{pkg["homepage"] || "N/A"}"
+  puts "  URL         : #{pkg["url"]}"
+  puts "  SHA256      : #{pkg["sha256"]}"
+  puts "  Installed   : #{installed ? Color.green(installed) : Color.yellow("No")}"
+  puts
+end
+
+def cmd_update
+  step "Updating package registry"
+  ensure_dirs
+
+  begin
+    body = fetch_url(REGISTRY_URL)
+    parsed = JSON.parse(body)
+    pkg_count = parsed["packages"]&.size || 0
+    File.write(REGISTRY_PATH, body)
+    ok "Registry updated (#{pkg_count} packages)"
+  rescue => e
+    error "Failed to update registry: #{e.message}"
+    exit 1
+  end
+
+  puts
+  step "Checking for snag updates"
+  begin
+    remote = fetch_url(SNAG_RAW_URL)
+    local  = File.exist?(__FILE__) ? File.read(__FILE__) : ""
+    if remote == local
+      ok "snag is up to date"
+    else
+      File.write(__FILE__, remote)
+      FileUtils.chmod(0o755, __FILE__)
+      ok "snag updated to latest version!"
+    end
+  rescue => e
+    warn "Could not self-update: #{e.message}"
+  end
+end
+
+def cmd_version
+  puts "#{Color.bold("snag")} #{SNAG_VERSION}"
+  puts "Home    : #{SNAG_HOME}"
+  puts "Cellar  : #{SNAG_CELLAR}"
+  puts "Binary  : #{__FILE__}"
+end
+
+def cmd_help
+  puts
+  puts "  #{Color.bold(Color.cyan("snag"))} #{SNAG_VERSION} — a simple package manager"
+  puts
+  puts "  #{Color.bold("Usage:")} snag <command> [package]"
+  puts
+  puts "  #{Color.bold("Commands:")}"
+  cmds = [
+    ["install <package>",   "Download and install a package"],
+    ["uninstall <package>", "Remove an installed package"],
+    ["list",                "List all available packages"],
+    ["installed",           "Show what's installed"],
+    ["search <query>",      "Search packages by name or description"],
+    ["info <package>",      "Show detailed package info"],
+    ["update",              "Refresh registry and self-update snag"],
+    ["version",             "Print version info"],
+    ["help",                "Show this message"],
+  ]
+  cmds.each do |cmd, desc|
+    puts "    #{Color.cyan(cmd.ljust(24))} #{desc}"
+  end
+  puts
+  puts "  #{Color.bold("Examples:")}"
+  puts "    snag install hello"
+  puts "    snag search server"
+  puts "    snag info quickserve"
+  puts "    snag update"
+  puts
+end
+
+# --- Entry point ---
+
+command  = ARGV[0]
+argument = ARGV[1]
+
+case command
+when "install"
+  argument ? cmd_install(argument) : (error "Usage: snag install <package>"; exit 1)
+when "uninstall", "remove", "rm"
+  argument ? cmd_uninstall(argument) : (error "Usage: snag uninstall <package>"; exit 1)
+when "list", "ls"
+  cmd_list
+when "installed"
+  cmd_installed
+when "search"
+  argument ? cmd_search(argument) : (error "Usage: snag search <query>"; exit 1)
+when "info"
+  argument ? cmd_info(argument) : (error "Usage: snag info <package>"; exit 1)
+when "update", "upgrade"
+  cmd_update
+when "version", "--version", "-v"
+  cmd_version
+when "help", "--help", "-h", nil
+  cmd_help
+else
+  error "Unknown command: '#{command}'. Run 'snag help' for usage."
+  exit 1
+end

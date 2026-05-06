@@ -1,0 +1,102 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+RESET  = "\e[0m"
+RED    = "\e[31m"
+GREEN  = "\e[32m"
+YELLOW = "\e[33m"
+BLUE   = "\e[34m"
+CYAN   = "\e[36m"
+BOLD   = "\e[1m"
+
+LANG_BY_EXT = {
+  /\.rb$/       => :ruby,
+  /\.py$/       => :python,
+  /\.js$/       => :javascript,
+  /\.ts$/       => :javascript,
+  /\.sh$/       => :shell,
+  /\.bash$/     => :shell,
+  /\.zsh$/      => :shell,
+  /\.json$/     => :json,
+  /\.ya?ml$/    => :yaml,
+}
+
+COMMENT_RE = {
+  ruby:       /#[^!].*/,
+  python:     /#.*/,
+  javascript: /\/\/.*/,
+  shell:      /#[^!].*/,
+  json:       nil,
+  yaml:       /#.*/,
+}
+
+KEYWORD_RE = {
+  ruby:       /\b(def|end|class|module|if|elsif|else|unless|case|when|while|until|for|do|begin|rescue|ensure|raise|return|yield|require|require_relative|include|extend|prepend|attr_accessor|attr_reader|attr_writer|true|false|nil|self|super)\b/,
+  python:     /\b(def|class|if|elif|else|for|while|return|import|from|try|except|finally|with|as|pass|break|continue|lambda|yield|True|False|None|and|or|not|in|is)\b/,
+  javascript: /\b(function|var|let|const|if|else|for|while|do|return|import|export|default|class|new|delete|typeof|instanceof|true|false|null|undefined|async|await|switch|case|break|continue|throw|try|catch|finally)\b/,
+  shell:      /\b(if|then|else|elif|fi|for|in|do|done|while|until|case|esac|function|return|exit|echo|local|readonly|export|source|shift|set)\b/,
+  json:       /\b(true|false|null)\b/,
+  yaml:       /\b(true|false|null|yes|no)\b/,
+}
+
+NUMBER_RE = /\b\d+(\.\d+)?\b/
+STRING_RE = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/
+
+def highlight(line, lang)
+  # Colour strings first to avoid double-highlighting their contents
+  result = line.gsub(STRING_RE) { "#{YELLOW}#{$&}#{RESET}" }
+
+  if (kw = KEYWORD_RE[lang])
+    result = result.gsub(kw) do |m|
+      # Skip matches inside already-coloured spans (a rough guard)
+      m.start_with?("\e") ? m : "#{CYAN}#{m}#{RESET}"
+    end
+  end
+
+  result = result.gsub(NUMBER_RE) { "#{BLUE}#{$&}#{RESET}" }
+
+  if (cm = COMMENT_RE[lang])
+    result = result.gsub(cm) { "#{GREEN}#{$&}#{RESET}" }
+  end
+
+  result
+end
+
+def detect_lang(path)
+  LANG_BY_EXT.each { |re, lang| return lang if path.match?(re) }
+
+  # Shebang detection
+  first_line = File.open(path, &:readline) rescue ""
+  return :ruby   if first_line.include?("ruby")
+  return :python if first_line.include?("python")
+  return :shell  if first_line.include?("bash") || first_line.include?("sh")
+
+  nil
+end
+
+if ARGV.empty? || ARGV == ["-"]
+  $stdin.each_line { |l| print l }
+  exit
+end
+
+ARGV.each do |file|
+  unless File.exist?(file)
+    $stderr.puts "#{RED}colorcat: #{file}: No such file#{RESET}"
+    next
+  end
+
+  if File.directory?(file)
+    $stderr.puts "#{RED}colorcat: #{file}: Is a directory#{RESET}"
+    next
+  end
+
+  lang = detect_lang(file)
+
+  if ARGV.size > 1
+    puts "#{BOLD}#{BLUE}==> #{file} <==#{"=" * [0, 40 - file.length].max}#{RESET}"
+  end
+
+  File.each_line(file) do |line|
+    print lang ? highlight(line, lang) : line
+  end
+end

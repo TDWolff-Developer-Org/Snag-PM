@@ -1,0 +1,51 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'webrick'
+require 'optparse'
+
+options = { port: 8000, dir: Dir.pwd }
+
+OptionParser.new do |o|
+  o.banner = "Usage: quickserve [options] [directory]"
+  o.on("-p", "--port PORT", Integer, "Port to listen on (default: 8000)") { |v| options[:port] = v }
+  o.on("-h", "--help", "Show this help") { puts o; exit }
+end.parse!
+
+options[:dir] = File.expand_path(ARGV[0]) if ARGV[0]
+
+unless Dir.exist?(options[:dir])
+  $stderr.puts "\e[31m✗\e[0m Directory not found: #{options[:dir]}"
+  exit 1
+end
+
+RESET = "\e[0m"
+GREEN = "\e[32m"
+CYAN  = "\e[36m"
+BOLD  = "\e[1m"
+
+puts
+puts "  #{BOLD}#{GREEN}quickserve#{RESET}"
+puts "  Serving : #{CYAN}#{options[:dir]}#{RESET}"
+puts "  URL     : #{CYAN}http://localhost:#{options[:port]}#{RESET}"
+puts "  Stop    : Ctrl+C"
+puts
+
+access_log = [[
+  STDOUT,
+  "  \e[34m%{REQUEST_LINE}s\e[0m → %{HTTP_VERSION}s %{RESPONSE_CODE}s (%{CONTENT_LENGTH}s bytes)"
+]]
+
+server = WEBrick::HTTPServer.new(
+  Port:         options[:port],
+  DocumentRoot: options[:dir],
+  Logger:       WEBrick::Log.new(File::NULL),
+  AccessLog:    access_log
+)
+
+trap('INT') do
+  puts "\n  Shutting down..."
+  server.shutdown
+end
+
+server.start
