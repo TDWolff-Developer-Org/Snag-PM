@@ -111,15 +111,29 @@ end
 
 # --- Commands ---
 
-def cmd_install(name)
+def cmd_install(name, pinned_version = nil)
+  # Support snag install hello@1.0.0
+  if name.include?("@")
+    name, pinned_version = name.split("@", 2)
+  end
+
   packages = load_registry
   unless packages.key?(name)
     error "Package '#{name}' not found. Try 'snag search #{name}' or 'snag list'."
     exit 1
   end
 
-  pkg     = packages[name]
-  version = pkg["version"]
+  pkg            = packages[name]
+  latest_version = pkg["version"]
+
+  if pinned_version && pinned_version != latest_version
+    error "Version #{pinned_version} of '#{name}' is not available."
+    info  "Available version: #{Color.green(latest_version)}"
+    info  "Install it with:   snag install #{name}@#{latest_version}"
+    exit 1
+  end
+
+  version  = latest_version
   existing = installed_version(name)
 
   if existing == version
@@ -409,7 +423,7 @@ def cmd_help
   puts
   puts "  #{Color.bold("Commands:")}"
   cmds = [
-    ["install <package>",   "Download and install a package"],
+    ["install <package[@version]>", "Download and install a package"],
     ["uninstall <package>", "Remove an installed package"],
     ["upgrade [package]",   "Upgrade one package or all installed packages"],
     ["outdated",            "Show installed packages with newer versions available"],
@@ -427,6 +441,7 @@ def cmd_help
   puts
   puts "  #{Color.bold("Examples:")}"
   puts "    snag install hello"
+  puts "    snag install hello@1.0.0"
   puts "    snag search server"
   puts "    snag info quickserve"
   puts "    snag update"
