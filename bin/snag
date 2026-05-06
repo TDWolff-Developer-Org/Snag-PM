@@ -408,6 +408,103 @@ def cmd_update
   end
 end
 
+def cmd_doctor
+  issues = 0
+
+  check = lambda do |label, &block|
+    result, detail = block.call
+    if result
+      puts "  #{Color.green("✓")} #{label}#{detail ? " — #{detail}" : ""}"
+    else
+      puts "  #{Color.red("✗")} #{label}#{detail ? " — #{detail}" : ""}"
+      issues += 1
+    end
+  end
+
+  puts
+  puts "  #{Color.bold("snag doctor")} — checking your setup"
+  puts
+
+  # Ruby version
+  check.call("Ruby installed") do
+    version = RUBY_VERSION
+    [true, "ruby #{version}"]
+  end
+
+  # snag binary is executable
+  check.call("snag binary is executable") do
+    [File.executable?(__FILE__), __FILE__]
+  end
+
+  # ~/.snag/bin in PATH
+  check.call("~/.snag/bin is in PATH") do
+    in_path = ENV["PATH"].split(":").any? { |p| File.expand_path(p) == File.expand_path(SNAG_BIN) }
+    [in_path, in_path ? nil : "run: export PATH=\"$HOME/.snag/bin:$PATH\""]
+  end
+
+  # Cellar directory exists
+  check.call("Cellar directory exists") do
+    [Dir.exist?(SNAG_CELLAR), SNAG_CELLAR]
+  end
+
+  # Registry exists and is valid
+  check.call("Registry is present and valid") do
+    if File.exist?(REGISTRY_PATH)
+      begin
+        JSON.parse(File.read(REGISTRY_PATH))
+        [true, REGISTRY_PATH]
+      rescue JSON::ParserError
+        [false, "corrupted — run 'snag update'"]
+      end
+    else
+      [false, "missing — run 'snag update'"]
+    end
+  end
+
+  # No broken symlinks in bin
+  broken = []
+  if Dir.exist?(SNAG_BIN)
+    Dir.each_child(SNAG_BIN) do |f|
+      next if f == "snag"
+      link = File.join(SNAG_BIN, f)
+      broken << f if File.symlink?(link) && !File.exist?(link)
+    end
+  end
+  check.call("No broken symlinks in ~/.snag/bin") do
+    broken.empty? ? [true, nil] : [false, "broken: #{broken.join(", ")} — run 'snag uninstall' and reinstall"]
+  end
+
+  # Installed packages have their binaries
+  if Dir.exist?(SNAG_CELLAR)
+    Dir.each_child(SNAG_CELLAR) do |pkg|
+      version = installed_version(pkg)
+      next unless version
+      bin_dir = File.join(install_path(pkg, version), "bin")
+      check.call("#{pkg} #{version} has binaries") do
+        [Dir.exist?(bin_dir) && !Dir.empty?(bin_dir), install_path(pkg, version)]
+      end
+    end
+  end
+
+  # Internet connectivity
+  check.call("GitHub reachable") do
+    begin
+      fetch_url("https://github.com")
+      [true, nil]
+    rescue
+      [false, "cannot reach github.com"]
+    end
+  end
+
+  puts
+  if issues == 0
+    puts "  #{Color.green(Color.bold("All checks passed!"))}"
+  else
+    puts "  #{Color.red(Color.bold("#{issues} issue(s) found."))} Fix the errors above and run 'snag doctor' again."
+  end
+  puts
+end
+
 def cmd_version
   puts "#{Color.bold("snag")} #{SNAG_VERSION}"
   puts "Home    : #{SNAG_HOME}"
@@ -432,6 +529,7 @@ def cmd_help
     ["search <query>",      "Search packages by name or description"],
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
+    ["doctor",              "Check your snag installation for problems"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
   ]
@@ -472,6 +570,8 @@ when "outdated"
   cmd_outdated
 when "update"
   cmd_update
+when "doctor"
+  cmd_doctor
 when "version", "--version", "-v"
   cmd_version
 when "help", "--help", "-h", nil
