@@ -2,22 +2,6 @@
   "version": "1",
   "updated": "2026-05-06",
   "packages": {
-    "hello": {
-      "name": "hello",
-      "version": "1.0.0",
-      "description": "A friendly greeting program — the classic Hello, World!",
-      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
-      "sha256": "01e9bd16a92521808dc326cbc5b46fd83a337568c029562c8c5c79c29499d6ab"
-    },
-    "quickserve": {
-      "name": "quickserve",
-      "version": "1.0.0",
-      "description": "Instantly serve any directory over HTTP — like python -m http.server but better",
-      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/quickserve-1.0.0/quickserve-1.0.0.tar.gz",
-      "sha256": "d2e7319486edbbfca05e38a7a693a6f3e5f6bc899169c7ff293a1d1a8d76a1dd"
-    },
     "colorcat": {
       "name": "colorcat",
       "version": "1.0.0",
