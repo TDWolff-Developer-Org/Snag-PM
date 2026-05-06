@@ -419,6 +419,37 @@ def cmd_update
     FileUtils.rm_f(snag_tmp) rescue nil
     warn "Could not self-update: #{e.message}"
   end
+
+  # Upgrade any installed packages that have newer versions in the registry
+  puts
+  step "Upgrading installed packages"
+  packages = load_registry
+  upgraded = 0
+
+  if Dir.exist?(SNAG_CELLAR)
+    Dir.children(SNAG_CELLAR).sort.each do |pkg_name|
+      current = installed_version(pkg_name)
+      next unless current
+      latest = packages.dig(pkg_name, "version")
+      next unless latest
+
+      if current == latest
+        ok "#{pkg_name} #{current} is up to date"
+      else
+        warn "#{pkg_name} #{current} → #{Color.green(latest)}"
+        cmd_uninstall(pkg_name)
+        cmd_install(pkg_name)
+        upgraded += 1
+      end
+    end
+  end
+
+  if upgraded == 0
+    ok "All packages up to date" unless Dir.exist?(SNAG_CELLAR) && !Dir.children(SNAG_CELLAR).empty?
+  else
+    puts
+    ok "#{upgraded} package(s) upgraded."
+  end
 end
 
 def cmd_doctor
