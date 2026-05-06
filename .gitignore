@@ -18,3 +18,5 @@ dist/
 *.gem
 .bundle/
 vendor/bundle/
+
+USAGE.md
