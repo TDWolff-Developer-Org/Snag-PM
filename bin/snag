@@ -123,7 +123,38 @@ def cmd_install(name, pinned_version = nil)
 
   packages = load_registry
   unless packages.key?(name)
-    error "Package '#{name}' not found. Try 'snag search #{name}' or 'snag list'."
+    error "Package '#{name}' not found."
+
+    suggestion = packages.keys.min_by do |pkg|
+      s, t = name.downcase, pkg.downcase
+      d = Array.new(s.length + 1) { |i| Array.new(t.length + 1) { |j| i.zero? ? j : j.zero? ? i : 0 } }
+      (1..s.length).each do |i|
+        (1..t.length).each do |j|
+          d[i][j] = s[i-1] == t[j-1] ? d[i-1][j-1] : 1 + [d[i-1][j], d[i][j-1], d[i-1][j-1]].min
+        end
+      end
+      d[s.length][t.length]
+    end
+
+    if suggestion
+      s, t = name.downcase, suggestion.downcase
+      d = Array.new(s.length + 1) { |i| Array.new(t.length + 1) { |j| i.zero? ? j : j.zero? ? i : 0 } }
+      (1..s.length).each do |i|
+        (1..t.length).each do |j|
+          d[i][j] = s[i-1] == t[j-1] ? d[i-1][j-1] : 1 + [d[i-1][j], d[i][j-1], d[i-1][j-1]].min
+        end
+      end
+      distance = d[s.length][t.length]
+
+      if distance <= [name.length / 2, 3].max
+        puts
+        info "Are you trying to install #{Color.cyan(suggestion)}?"
+        info "Run: #{Color.bold("snag install #{suggestion}")}"
+      else
+        info "Run 'snag search #{name}' to browse available packages."
+      end
+    end
+
     exit 1
   end
 
