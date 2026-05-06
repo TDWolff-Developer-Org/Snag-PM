@@ -88,7 +88,7 @@ def highlight(line, lang)
   return "#{BOLD}#{line}#{RESET}"  if lang == :diff && line.start_with?("diff", "index", "---", "+++")
 
   if lang == :markdown
-    return "#{BOLD}#{YELLOW}#{line}#{RESET}" if line.match?(/^#{1,6}\s/)
+    return "#{BOLD}#{YELLOW}#{line}#{RESET}" if line.match?(/^[#]{1,6}\s/)
     return "#{DIM}#{line}#{RESET}"           if line.match?(/^[\-\*]\s|^\d+\.\s/)
   end
 
