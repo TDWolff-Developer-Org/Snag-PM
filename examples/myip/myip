@@ -1,0 +1,161 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'net/http'
+require 'json'
+require 'socket'
+
+RESET  = "\e[0m"
+BOLD   = "\e[1m"
+DIM    = "\e[2m"
+RED    = "\e[31m"
+GREEN  = "\e[32m"
+YELLOW = "\e[33m"
+BLUE   = "\e[34m"
+CYAN   = "\e[36m"
+WHITE  = "\e[37m"
+
+def header(title)
+  puts
+  puts "  #{BOLD}#{CYAN}#{title}#{RESET}"
+  puts "  #{DIM}#{"─" * 40}#{RESET}"
+end
+
+def row(label, value, color = WHITE)
+  puts "  #{DIM}#{label.ljust(22)}#{RESET}#{color}#{value}#{RESET}"
+end
+
+def fetch_json(url)
+  uri = URI.parse(url)
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https',
+                             open_timeout: 5, read_timeout: 5) do |http|
+    http.get(uri.request_uri, "User-Agent" => "myip/1.0")
+  end
+  return nil unless response.code == "200"
+  JSON.parse(response.body)
+rescue
+  nil
+end
+
+# ── Local network info ──────────────────────────────────────────────────────────
+
+header "Local Network"
+
+hostname = Socket.gethostname
+row "Hostname", hostname, CYAN
+
+local_ips = Socket.getifaddrs
+  .reject { |i| i.addr.nil? }
+  .select { |i| i.addr.ipv4? || i.addr.ipv6? }
+  .reject { |i| i.name == "lo0" || i.name == "lo" }
+  .map    { |i| [i.name, i.addr.ip_address] }
+
+if local_ips.empty?
+  row "Local IP", "none found", YELLOW
+else
+  local_ips.each do |iface, ip|
+    row "Local IP (#{iface})", ip, GREEN
+  end
+end
+
+# Default gateway interface
+default_iface = `route get default 2>/dev/null | grep interface`&.strip&.split&.last rescue nil
+row "Default interface", default_iface || "unknown", WHITE if default_iface
+
+# ── Public IP info ──────────────────────────────────────────────────────────────
+
+header "Public IP"
+
+data = fetch_json("https://ipapi.co/json/")
+
+if data.nil? || data["error"]
+  # Fallback: just get the IP from a simpler service
+  begin
+    ip = Net::HTTP.get(URI("https://api.ipify.org")).strip
+    row "Public IP", ip, GREEN
+    row "Details", "unavailable (rate limited — try again shortly)", YELLOW
+  rescue
+    row "Public IP", "unavailable — check your connection", RED
+  end
+else
+  ip      = data["ip"]
+  org     = data["org"]
+  isp     = data["org"]
+  city    = data["city"]
+  region  = data["region"]
+  country = data["country_name"]
+  postal  = data["postal"]
+  tz      = data["timezone"]
+  lat     = data["latitude"]
+  lon     = data["longitude"]
+  vpn_hint = org&.match?(/vpn|proxy|hosting|cloud|digital.ocean|linode|vultr|aws|google|azure/i)
+
+  row "Public IP",  ip,                                   GREEN
+  row "ISP / Org",  isp || "unknown",                     WHITE
+  row "City",       city || "unknown",                    WHITE
+  row "Region",     region || "unknown",                  WHITE
+  row "Country",    country || "unknown",                 WHITE
+  row "Postal",     postal || "unknown",                  WHITE
+  row "Timezone",   tz || "unknown",                      WHITE
+  row "Coordinates","#{lat}, #{lon}",                     DIM + WHITE if lat && lon
+  row "Maps link",  "https://maps.google.com/?q=#{lat},#{lon}", DIM + CYAN if lat && lon
+
+  if vpn_hint
+    puts
+    puts "  #{YELLOW}#{BOLD}⚠  VPN or hosting provider detected#{RESET}"
+  end
+end
+
+# ── DNS ─────────────────────────────────────────────────────────────────────────
+
+header "DNS Servers"
+
+dns_servers = []
+
+# macOS: scutil
+scutil_out = `scutil --dns 2>/dev/null` rescue ""
+dns_servers = scutil_out.scan(/nameserver\[[\d]+\]\s*:\s*([\d\.a-f:]+)/).flatten.uniq
+
+# Linux fallback: /etc/resolv.conf
+if dns_servers.empty?
+  resolv = File.readlines("/etc/resolv.conf") rescue []
+  dns_servers = resolv.grep(/^nameserver/).map { |l| l.split[1] }.compact
+end
+
+if dns_servers.empty?
+  row "DNS", "could not detect", YELLOW
+else
+  dns_servers.first(4).each_with_index do |dns, i|
+    label = i == 0 ? "Primary DNS" : "DNS #{i + 1}"
+    # Known DNS provider labels
+    name = case dns
+    when "1.1.1.1", "1.0.0.1"           then " #{DIM}(Cloudflare)#{RESET}"
+    when "8.8.8.8", "8.8.4.4"           then " #{DIM}(Google)#{RESET}"
+    when "9.9.9.9", "149.112.112.112"   then " #{DIM}(Quad9)#{RESET}"
+    when "208.67.222.222","208.67.220.220" then " #{DIM}(OpenDNS)#{RESET}"
+    else ""
+    end
+    row label, "#{dns}#{name}", CYAN
+  end
+end
+
+# ── Connection type hint ────────────────────────────────────────────────────────
+
+header "Connection"
+
+# Check if we're on Wi-Fi or Ethernet (macOS)
+wifi_iface = `networksetup -listallhardwareports 2>/dev/null` rescue ""
+active_wifi = local_ips.map(&:first).any? { |i| i.start_with?("en") }
+
+if RUBY_PLATFORM.include?("darwin")
+  wifi_ssid = `networksetup -getairportnetwork en0 2>/dev/null`&.strip rescue ""
+  if wifi_ssid&.include?("Current Wi-Fi Network:")
+    ssid = wifi_ssid.split(":").last.strip
+    row "Wi-Fi SSID", ssid, GREEN
+    row "Type", "Wi-Fi", GREEN
+  elsif wifi_ssid&.include?("not associated")
+    row "Type", "Ethernet (not on Wi-Fi)", CYAN
+  end
+end
+
+puts

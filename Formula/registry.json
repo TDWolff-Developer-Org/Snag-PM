@@ -8,7 +8,15 @@
       "description": "Like cat, but with basic syntax highlighting for Ruby, Python, JS, Shell, and JSON",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
       "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/colorcat-1.0.0/colorcat-1.0.0.tar.gz",
-      "sha256": "e6e6223a18868f791151d932e841b8a9889963227993bf54b62fd6b1a4438059"
+      "sha256": "9a3477f8c6b2311de9f90cadf05bf13d882d8b9c53520a496768bbb67b209965"
+    },
+    "myip": {
+      "name": "myip",
+      "version": "1.0.0",
+      "description": "Detailed local and public IP info — location, ISP, DNS, Wi-Fi SSID, and more",
+      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
+      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/myip-1.0.0/myip-1.0.0.tar.gz",
+      "sha256": "46d418212fb206755ee31eac6b2cfc893ad97997580e04b8ecd043d0ed9e681e"
     }
   }
 }
