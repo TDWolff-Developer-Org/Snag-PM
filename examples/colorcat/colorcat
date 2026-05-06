@@ -74,7 +74,12 @@ def detect_lang(path)
   nil
 end
 
-if ARGV.empty? || ARGV == ["-"]
+if ARGV.empty?
+  warn "Usage: colorcat <file> [file2 ...]\n       colorcat -   (read from stdin)"
+  exit 1
+end
+
+if ARGV == ["-"]
   $stdin.each_line { |l| print l }
   exit
 end
@@ -96,7 +101,7 @@ ARGV.each do |file|
     puts "#{BOLD}#{BLUE}==> #{file} <==#{"=" * [0, 40 - file.length].max}#{RESET}"
   end
 
-  File.each_line(file) do |line|
+  File.foreach(file) do |line|
     print lang ? highlight(line, lang) : line
   end
 end
