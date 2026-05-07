@@ -8,7 +8,7 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.3-al"
+SNAG_VERSION  = "1.0.3-lac"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -135,8 +135,53 @@ end
 
 # --- Commands ---
 
+def levenshtein(a, b)
+  s, t = a.downcase, b.downcase
+  d = Array.new(s.length + 1) { |i| Array.new(t.length + 1) { |j| i.zero? ? j : j.zero? ? i : 0 } }
+  (1..s.length).each do |i|
+    (1..t.length).each do |j|
+      d[i][j] = s[i-1] == t[j-1] ? d[i-1][j-1] : 1 + [d[i-1][j], d[i][j-1], d[i-1][j-1]].min
+    end
+  end
+  d[s.length][t.length]
+end
+
+def suggest_similar(name, candidates)
+  return if candidates.empty?
+  best = candidates.min_by { |c| levenshtein(name, c) }
+  return unless best
+  distance = levenshtein(name, best)
+  if distance <= [name.length / 2, 3].max
+    puts
+    info "Are you trying to install #{Color.cyan(best)}?"
+    info "Run: #{Color.bold("snag install #{best}")}"
+  else
+    info "Run 'snag search #{name}' to browse available packages."
+  end
+end
+
+# Build a topologically-sorted install order: deps first, target last.
+# Raises RuntimeError on cycles or missing packages.
+def resolve_deps(name, packages, visiting = [], resolved = [])
+  return resolved if resolved.include?(name)
+
+  if visiting.include?(name)
+    cycle = visiting[visiting.index(name)..] + [name]
+    raise "Dependency cycle detected: #{cycle.join(" → ")}"
+  end
+
+  unless packages.key?(name)
+    raise "Missing dependency: '#{name}' is not in the registry"
+  end
+
+  visiting = visiting + [name]
+  deps = packages[name]["depends_on"] || []
+  deps.each { |d| resolve_deps(d, packages, visiting, resolved) }
+  resolved << name unless resolved.include?(name)
+  resolved
+end
+
 def cmd_install(name, pinned_version = nil)
-  # Support snag install hello@1.0.0
   if name.include?("@")
     name, pinned_version = name.split("@", 2)
   end
@@ -144,40 +189,30 @@ def cmd_install(name, pinned_version = nil)
   packages = load_registry
   unless packages.key?(name)
     error "Package '#{name}' not found."
-
-    suggestion = packages.keys.min_by do |pkg|
-      s, t = name.downcase, pkg.downcase
-      d = Array.new(s.length + 1) { |i| Array.new(t.length + 1) { |j| i.zero? ? j : j.zero? ? i : 0 } }
-      (1..s.length).each do |i|
-        (1..t.length).each do |j|
-          d[i][j] = s[i-1] == t[j-1] ? d[i-1][j-1] : 1 + [d[i-1][j], d[i][j-1], d[i-1][j-1]].min
-        end
-      end
-      d[s.length][t.length]
-    end
-
-    if suggestion
-      s, t = name.downcase, suggestion.downcase
-      d = Array.new(s.length + 1) { |i| Array.new(t.length + 1) { |j| i.zero? ? j : j.zero? ? i : 0 } }
-      (1..s.length).each do |i|
-        (1..t.length).each do |j|
-          d[i][j] = s[i-1] == t[j-1] ? d[i-1][j-1] : 1 + [d[i-1][j], d[i][j-1], d[i-1][j-1]].min
-        end
-      end
-      distance = d[s.length][t.length]
-
-      if distance <= [name.length / 2, 3].max
-        puts
-        info "Are you trying to install #{Color.cyan(suggestion)}?"
-        info "Run: #{Color.bold("snag install #{suggestion}")}"
-      else
-        info "Run 'snag search #{name}' to browse available packages."
-      end
-    end
-
+    suggest_similar(name, packages.keys)
     exit 1
   end
 
+  begin
+    install_order = resolve_deps(name, packages)
+  rescue RuntimeError => e
+    error e.message
+    exit 1
+  end
+
+  deps = install_order[0..-2]
+  unless deps.empty?
+    info "#{Color.bold(name)} depends on: #{deps.map { |d| Color.cyan(d) }.join(", ")}"
+    puts
+  end
+
+  install_order.each do |pkg_name|
+    pin = pkg_name == name ? pinned_version : nil
+    install_resolved(pkg_name, packages, pin)
+  end
+end
+
+def install_resolved(name, packages, pinned_version = nil)
   pkg            = packages[name]
   latest_version = pkg["version"]
 
@@ -337,6 +372,8 @@ def cmd_info(name)
   puts "  Description : #{pkg["description"]}"
   puts "  Version     : #{pkg["version"]}"
   puts "  Homepage    : #{pkg["homepage"] || "N/A"}"
+  deps = pkg["depends_on"] || []
+  puts "  Depends on  : #{deps.empty? ? Color.cyan("none") : deps.map { |d| Color.cyan(d) }.join(", ")}"
   if pkg["platforms"]
     puts "  Type        : binary"
     puts "  Platforms   : #{pkg["platforms"].keys.join(", ")}"
@@ -533,6 +570,116 @@ def cmd_update
   end
 end
 
+def dir_size(path)
+  total = 0
+  Dir.glob(File.join(path, "**", "*"), File::FNM_DOTMATCH).each do |f|
+    total += File.size(f) if File.file?(f)
+  end
+  total
+rescue
+  0
+end
+
+def format_bytes(n)
+  return "0 B" if n.nil? || n == 0
+  units = %w[B KB MB GB]
+  i = 0
+  size = n.to_f
+  while size >= 1024 && i < units.size - 1
+    size /= 1024
+    i += 1
+  end
+  "%.1f %s" % [size, units[i]]
+end
+
+def cmd_cleanup(dry_run = false)
+  ensure_dirs
+  puts
+  puts "  #{Color.bold("snag cleanup")}#{dry_run ? " #{Color.yellow("(dry run)")}" : ""}"
+  puts
+
+  total_freed = 0
+  removed_versions = 0
+
+  # 1. Old versions in Cellar
+  step "Old package versions"
+  if Dir.exist?(SNAG_CELLAR)
+    Dir.children(SNAG_CELLAR).sort.each do |pkg|
+      pkg_dir = File.join(SNAG_CELLAR, pkg)
+      next unless Dir.exist?(pkg_dir)
+      versions = Dir.children(pkg_dir).sort
+      next if versions.size <= 1
+
+      keep = versions.last
+      versions[0..-2].each do |v|
+        path = File.join(pkg_dir, v)
+        size = dir_size(path)
+        total_freed += size
+        removed_versions += 1
+        if dry_run
+          info "Would remove #{Color.cyan(pkg)} #{Color.yellow(v)} (#{format_bytes(size)}) — keeping #{Color.green(keep)}"
+        else
+          FileUtils.rm_rf(path)
+          ok "Removed #{Color.cyan(pkg)} #{Color.yellow(v)} (#{format_bytes(size)})"
+        end
+      end
+    end
+  end
+  ok "No old versions to clean" if removed_versions == 0
+
+  # 2. Broken symlinks in bin/
+  puts
+  step "Broken symlinks"
+  broken = []
+  if Dir.exist?(SNAG_BIN)
+    Dir.each_child(SNAG_BIN) do |f|
+      next if f == "snag"
+      link = File.join(SNAG_BIN, f)
+      broken << f if File.symlink?(link) && !File.exist?(link)
+    end
+  end
+  if broken.empty?
+    ok "No broken symlinks"
+  elsif dry_run
+    broken.each { |f| info "Would remove broken symlink #{Color.yellow(f)}" }
+  else
+    broken.each do |f|
+      FileUtils.rm_f(File.join(SNAG_BIN, f))
+      ok "Removed broken symlink #{Color.yellow(f)}"
+    end
+  end
+
+  # 3. Temp files
+  puts
+  step "Temporary files"
+  tmp_files = Dir.glob(File.join(SNAG_HOME, "*.tmp"))
+  if tmp_files.empty?
+    ok "No temp files"
+  else
+    tmp_files.each do |f|
+      size = File.size(f) rescue 0
+      total_freed += size
+      if dry_run
+        info "Would remove #{f} (#{format_bytes(size)})"
+      else
+        FileUtils.rm_f(f)
+        ok "Removed #{File.basename(f)} (#{format_bytes(size)})"
+      end
+    end
+  end
+
+  puts
+  if dry_run
+    info "Dry run — nothing was removed."
+    info "Run #{Color.cyan("snag cleanup")} (without --dry-run) to apply."
+  elsif total_freed > 0
+    ok "Freed #{Color.bold(format_bytes(total_freed))} total"
+  else
+    ok "Already clean"
+  end
+  puts
+end
+
 def cmd_doctor
   issues = 0
 
@@ -717,6 +864,7 @@ def cmd_help
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
+    ["cleanup [--dry-run]",  "Remove old versions, broken symlinks, and temp files"],
     ["self-uninstall",      "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
@@ -758,6 +906,8 @@ when "update"
   cmd_update
 when "doctor"
   cmd_doctor
+when "cleanup"
+  cmd_cleanup(argument == "--dry-run")
 when "self-uninstall", "--uninstall"
   cmd_self_uninstall
 when "version", "--version", "-v"
