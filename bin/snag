@@ -8,7 +8,7 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.2"
+SNAG_VERSION  = "1.0.1"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
