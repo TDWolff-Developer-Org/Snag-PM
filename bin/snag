@@ -457,10 +457,12 @@ def cmd_update
                   "-H", "Cache-Control: no-cache",
                   "-H", "Pragma: no-cache",
                   REGISTRY_URL, "-o", registry_tmp)
+  remote_snag_version = nil
   if result && File.exist?(registry_tmp)
     begin
       parsed = JSON.parse(File.read(registry_tmp))
       pkg_count = parsed["packages"]&.size || 0
+      remote_snag_version = parsed["snag_version"]
       FileUtils.mv(registry_tmp, REGISTRY_PATH)
       ok "Registry updated (#{pkg_count} packages)"
     rescue JSON::ParserError
@@ -476,28 +478,27 @@ def cmd_update
 
   puts
   step "Checking for snag updates"
-  begin
-    snag_tmp = File.join(SNAG_HOME, "snag.tmp")
-    result = system("curl", "-fsSL",
-                    "-H", "Cache-Control: no-cache",
-                    "-H", "Pragma: no-cache",
-                    SNAG_RAW_URL, "-o", snag_tmp)
-    raise "curl failed" unless result && File.exist?(snag_tmp)
+  if remote_snag_version.nil?
+    warn "Registry has no snag_version field — skipping self-update check"
+  elsif remote_snag_version == SNAG_VERSION
+    ok "snag #{SNAG_VERSION} is up to date"
+  else
+    info "Updating snag #{Color.yellow(SNAG_VERSION)} → #{Color.green(remote_snag_version)}"
+    begin
+      snag_tmp = File.join(SNAG_HOME, "snag.tmp")
+      result = system("curl", "-fsSL",
+                      "-H", "Cache-Control: no-cache",
+                      "-H", "Pragma: no-cache",
+                      SNAG_RAW_URL, "-o", snag_tmp)
+      raise "curl failed" unless result && File.exist?(snag_tmp)
 
-    remote = File.read(snag_tmp)
-    local  = File.exist?(__FILE__) ? File.read(__FILE__) : ""
-
-    if remote == local
-      ok "snag is up to date"
-      FileUtils.rm_f(snag_tmp)
-    else
       FileUtils.mv(snag_tmp, __FILE__)
       FileUtils.chmod(0o755, __FILE__)
-      ok "snag updated to latest version!"
+      ok "snag updated to #{remote_snag_version}!"
+    rescue => e
+      FileUtils.rm_f(snag_tmp) rescue nil
+      warn "Could not self-update: #{e.message}"
     end
-  rescue => e
-    FileUtils.rm_f(snag_tmp) rescue nil
-    warn "Could not self-update: #{e.message}"
   end
 
   # Upgrade any installed packages that have newer versions in the registry
