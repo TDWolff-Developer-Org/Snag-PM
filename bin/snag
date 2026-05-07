@@ -8,12 +8,13 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.3-laf"
+SNAG_VERSION  = "1.0.3-ag"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
 REGISTRY_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/Formula/registry.json"
 REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
+INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
 SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
 
 module Color
@@ -133,6 +134,75 @@ def install_path(name, version)
   File.join(SNAG_CELLAR, name, version)
 end
 
+# --- Install ledger (~/.snag/installed.json) ---
+
+# Reads the install ledger, backfilling any package present in Cellar that
+# isn't tracked yet. Backfilled entries default to "explicit" so packages
+# installed before the ledger existed are never auto-removed as orphans.
+def load_installed
+  data = if File.exist?(INSTALLED_PATH)
+    JSON.parse(File.read(INSTALLED_PATH)) rescue {}
+  else
+    {}
+  end
+
+  if Dir.exist?(SNAG_CELLAR)
+    Dir.children(SNAG_CELLAR).each do |pkg|
+      v = installed_version(pkg)
+      next unless v
+      next if data[pkg]
+      data[pkg] = { "version" => v, "installed_as" => "explicit" }
+    end
+  end
+
+  data
+end
+
+def save_installed(data)
+  ensure_dirs
+  File.write(INSTALLED_PATH, JSON.pretty_generate(data) + "\n")
+end
+
+def mark_installed(name, version, reason)
+  data = load_installed
+  # Don't demote an explicit install to dependency
+  if data[name] && data[name]["installed_as"] == "explicit" && reason == "dependency"
+    reason = "explicit"
+  end
+  data[name] = { "version" => version, "installed_as" => reason }
+  save_installed(data)
+end
+
+def unmark_installed(name)
+  data = load_installed
+  data.delete(name)
+  save_installed(data)
+end
+
+# Walks the dep tree of every "explicit" package. Anything reachable is
+# "needed". Anything marked "dependency" that isn't reachable is an orphan.
+def find_orphans
+  installed = load_installed
+  packages  = load_registry
+  needed    = []
+
+  installed.each do |name, info|
+    next unless info["installed_as"] == "explicit"
+    queue = [name]
+    until queue.empty?
+      current = queue.shift
+      next if needed.include?(current)
+      needed << current
+      next unless packages.key?(current)
+      (packages[current]["depends_on"] || []).each { |d| queue << d }
+    end
+  end
+
+  installed.keys.select do |name|
+    installed[name]["installed_as"] == "dependency" && !needed.include?(name)
+  end.sort
+end
+
 # --- Commands ---
 
 def levenshtein(a, b)
@@ -181,7 +251,7 @@ def resolve_deps(name, packages, visiting = [], resolved = [])
   resolved
 end
 
-def cmd_install(name, pinned_version = nil)
+def cmd_install(name, pinned_version = nil, target_reason = "explicit")
   if name.include?("@")
     name, pinned_version = name.split("@", 2)
   end
@@ -208,11 +278,12 @@ def cmd_install(name, pinned_version = nil)
 
   install_order.each do |pkg_name|
     pin = pkg_name == name ? pinned_version : nil
-    install_resolved(pkg_name, packages, pin)
+    reason = pkg_name == name ? target_reason : "dependency"
+    install_resolved(pkg_name, packages, pin, reason)
   end
 end
 
-def install_resolved(name, packages, pinned_version = nil)
+def install_resolved(name, packages, pinned_version = nil, reason = "explicit")
   pkg            = packages[name]
   latest_version = pkg["version"]
 
@@ -228,6 +299,7 @@ def install_resolved(name, packages, pinned_version = nil)
 
   if existing == version
     ok "#{name} #{version} is already installed."
+    mark_installed(name, version, reason)
     return
   end
 
@@ -303,16 +375,18 @@ def install_resolved(name, packages, pinned_version = nil)
     end
   end
 
+  mark_installed(name, version, reason)
+
   puts
   ok "#{Color.bold(name)} #{version} installed successfully!"
 end
 
-def cmd_uninstall(name)
+# Raw uninstall — no orphan check or prompt. Used by cmd_uninstall (which adds
+# the orphan prompt) and by upgrade flows that need to remove + reinstall
+# without surfacing an unrelated cleanup question to the user.
+def uninstall_one(name)
   version = installed_version(name)
-  unless version
-    error "#{name} is not installed."
-    exit 1
-  end
+  return false unless version
 
   step "Uninstalling #{Color.bold(name)} #{version}"
   dest_dir = install_path(name, version)
@@ -340,7 +414,54 @@ def cmd_uninstall(name)
   end
 
   FileUtils.rm_rf(File.join(SNAG_CELLAR, name))
+  unmark_installed(name)
   ok "#{Color.bold(name)} uninstalled."
+  true
+end
+
+def cmd_uninstall(name)
+  unless installed_version(name)
+    error "#{name} is not installed."
+    exit 1
+  end
+
+  uninstall_one(name)
+
+  orphans = find_orphans
+  return if orphans.empty?
+
+  puts
+  info "Orphaned dependencies (no longer needed): #{orphans.map { |o| Color.cyan(o) }.join(", ")}"
+  print "  Remove them too? [y/N] "
+  answer = $stdin.gets&.strip&.downcase
+  if %w[y yes].include?(answer)
+    puts
+    orphans.each { |o| uninstall_one(o); puts }
+    ok "#{orphans.size} orphaned package(s) removed."
+  else
+    info "Run 'snag autoremove' later to clean them up."
+  end
+end
+
+def cmd_autoremove
+  orphans = find_orphans
+  if orphans.empty?
+    ok "No orphaned dependencies to remove."
+    return
+  end
+
+  puts
+  info "Orphaned dependencies: #{orphans.map { |o| Color.cyan(o) }.join(", ")}"
+  print "  Remove all? [y/N] "
+  answer = $stdin.gets&.strip&.downcase
+  unless %w[y yes].include?(answer)
+    info "Cancelled."
+    return
+  end
+
+  puts
+  orphans.each { |o| uninstall_one(o); puts }
+  ok "#{orphans.size} package(s) removed."
 end
 
 def cmd_list
@@ -355,11 +476,14 @@ def cmd_list
     return
   end
 
+  installed = load_installed
   puts "#{Color.bold("Installed packages:")} (#{pkgs.size} total)"
   puts
   pkgs.each do |name|
     v = installed_version(name)
-    puts "  #{Color.cyan(name.ljust(18))} #{v}"
+    reason = installed.dig(name, "installed_as") || "explicit"
+    tag = reason == "dependency" ? Color.yellow(" [dep]") : ""
+    puts "  #{Color.cyan(name.ljust(18))} #{v}#{tag}"
   end
   puts
 end
@@ -500,8 +624,9 @@ def cmd_upgrade(name = nil)
 
     puts
     step "Upgrading #{Color.bold(pkg_name)} #{Color.yellow(current)} → #{Color.green(latest)}"
-    cmd_uninstall(pkg_name)
-    cmd_install(pkg_name)
+    prior_reason = load_installed.dig(pkg_name, "installed_as") || "explicit"
+    uninstall_one(pkg_name)
+    cmd_install(pkg_name, nil, prior_reason)
     upgraded += 1
   end
 
@@ -585,8 +710,9 @@ def cmd_update
         ok "#{pkg_name} #{current} is up to date"
       else
         warn "#{pkg_name} #{current} → #{Color.green(latest)}"
-        cmd_uninstall(pkg_name)
-        cmd_install(pkg_name)
+        prior_reason = load_installed.dig(pkg_name, "installed_as") || "explicit"
+        uninstall_one(pkg_name)
+        cmd_install(pkg_name, nil, prior_reason)
         upgraded += 1
       end
     end
@@ -896,6 +1022,7 @@ def cmd_help
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
     ["cleanup [--dry-run]",  "Remove old versions, broken symlinks, and temp files"],
+    ["autoremove",           "Remove dependencies no longer required by any explicit package"],
     ["self-uninstall",      "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
@@ -939,6 +1066,8 @@ when "doctor"
   cmd_doctor
 when "cleanup"
   cmd_cleanup(argument == "--dry-run")
+when "autoremove"
+  cmd_autoremove
 when "self-uninstall", "--uninstall"
   cmd_self_uninstall
 when "version", "--version", "-v"
