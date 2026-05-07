@@ -17,8 +17,8 @@ error() { echo -e "${RED}✗${RESET} ${1}"; exit 1; }
 SNAG_HOME="${HOME}/.snag"
 SNAG_BIN="${SNAG_HOME}/bin"
 SNAG_CELLAR="${SNAG_HOME}/Cellar"
-SNAG_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/bin/snag"
-REGISTRY_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/Formula/registry.json"
+SNAG_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
+REGISTRY_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/Formula/registry.json"
 
 echo
 echo -e "  ${CYAN}${BOLD}Snag${RESET} — simple package manager"
