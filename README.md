@@ -3,7 +3,7 @@
 A simple, Homebrew-inspired package manager written in Ruby.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/install.sh)"
 ```
 
 ## Features
@@ -25,7 +25,7 @@ A simple, Homebrew-inspired package manager written in Ruby.
 ## Installation
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/install.sh)"
 ```
 
 The installer:
@@ -126,8 +126,8 @@ The registry lives at `Formula/registry.json` in this repo and is fetched to
   "name": "hello",
   "version": "1.0.0",
   "description": "A friendly greeting program",
-  "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-  "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
+  "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
+  "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
   "sha256": "abc123..."
 }
 ```

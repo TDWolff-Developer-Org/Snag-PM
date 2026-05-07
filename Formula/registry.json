@@ -6,16 +6,16 @@
       "name": "myip",
       "version": "1.0.0",
       "description": "Detailed local and public IP info — location, ISP, DNS, Wi-Fi SSID, and more",
-      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/myip-1.0.0/myip-1.0.0.tar.gz",
+      "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
+      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.0/myip-1.0.0.tar.gz",
       "sha256": "46d418212fb206755ee31eac6b2cfc893ad97997580e04b8ecd043d0ed9e681e"
     },
     "snagtools": {
       "name": "snagtools",
       "version": "1.0.1",
       "description": "Developer toolkit — syntax-highlighted cat, JSON pretty-printer, and hex dump",
-      "homepage": "https://github.com/TDWolff-Developer-Org/Snag-PM",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag-PM/releases/download/snagtools-1.0.1/snagtools-1.0.1.tar.gz",
+      "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
+      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/snagtools-1.0.1/snagtools-1.0.1.tar.gz",
       "sha256": "3a4701263e4c760b02cd9a7e7da417ab3b3e332072d140b34053ab600c6ea432"
     }
   }

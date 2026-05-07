@@ -7,7 +7,7 @@ Everything you need to go from this repo to a live, installable package manager.
 ## Step 1 — Fork or clone this repo
 
 ```bash
-git clone https://github.com/YOUR_TDWolff-Developer-Org/Snag-PM.git
+git clone https://github.com/YOUR_TDWolff-Developer-Org/Snag.git
 cd snag
 ```
 
@@ -76,7 +76,7 @@ git push
 In a fresh terminal (or a VM):
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_TDWolff-Developer-Org/Snag-PM/latest/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_TDWolff-Developer-Org/Snag/latest/install.sh)"
 source ~/.zshrc   # or ~/.bashrc
 snag list
 snag install hello
@@ -107,8 +107,8 @@ Add an entry to `Formula/registry.json`:
   "name": "mytool",
   "version": "1.0.0",
   "description": "Does something useful",
-  "homepage": "https://github.com/YOUR_TDWolff-Developer-Org/Snag-PM",
-  "url": "https://github.com/YOUR_TDWolff-Developer-Org/Snag-PM/releases/download/mytool-1.0.0/mytool-1.0.0.tar.gz",
+  "homepage": "https://github.com/YOUR_TDWolff-Developer-Org/Snag",
+  "url": "https://github.com/YOUR_TDWolff-Developer-Org/Snag/releases/download/mytool-1.0.0/mytool-1.0.0.tar.gz",
   "sha256": "PLACEHOLDER"
 }
 ```
