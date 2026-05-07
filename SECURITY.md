@@ -50,6 +50,6 @@ Please include:
 These are known limitations, not vulnerabilities:
 
 - Stale content from `raw.githubusercontent.com` CDN cache (timing issue, not a security issue).
-- Anything requiring an attacker to already have write access to your `~/.snag/` directory.
+- Anything requiring an attacker to already have write access to the `~/.snag/` directory.
 - The registry maintainer (me) publishing a malicious package — that's the trust assumption Snag makes. If you're worried about that, audit `Formula/registry.json` and the linked tarballs before installing.
 - Issues affecting unsupported versions (see the table above).
