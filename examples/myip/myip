@@ -59,7 +59,12 @@ else
 end
 
 # Default gateway interface
-default_iface = `route get default 2>/dev/null | grep interface`&.strip&.split&.last rescue nil
+default_iface = if RUBY_PLATFORM.include?("darwin")
+  `route get default 2>/dev/null | awk '/interface:/ {print $2}'`.strip rescue nil
+else
+  `ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}'`.strip rescue nil
+end
+default_iface = nil if default_iface.nil? || default_iface.empty?
 row "Default interface", default_iface || "unknown", WHITE if default_iface
 
 # ── Public IP info ──────────────────────────────────────────────────────────────
@@ -112,14 +117,12 @@ header "DNS Servers"
 
 dns_servers = []
 
-# macOS: scutil
-scutil_out = `scutil --dns 2>/dev/null` rescue ""
-dns_servers = scutil_out.scan(/nameserver\[[\d]+\]\s*:\s*([\d\.a-f:]+)/).flatten.uniq
-
-# Linux fallback: /etc/resolv.conf
-if dns_servers.empty?
+if RUBY_PLATFORM.include?("darwin")
+  scutil_out = `scutil --dns 2>/dev/null` rescue ""
+  dns_servers = scutil_out.scan(/nameserver\[\d+\]\s*:\s*([\d\.a-f:]+)/).flatten.uniq
+else
   resolv = File.readlines("/etc/resolv.conf") rescue []
-  dns_servers = resolv.grep(/^nameserver/).map { |l| l.split[1] }.compact
+  dns_servers = resolv.grep(/^nameserver/).map { |l| l.split[1] }.compact.uniq
 end
 
 if dns_servers.empty?
@@ -143,18 +146,30 @@ end
 
 header "Connection"
 
-# Check if we're on Wi-Fi or Ethernet (macOS)
-wifi_iface = `networksetup -listallhardwareports 2>/dev/null` rescue ""
-active_wifi = local_ips.map(&:first).any? { |i| i.start_with?("en") }
-
 if RUBY_PLATFORM.include?("darwin")
-  wifi_ssid = `networksetup -getairportnetwork en0 2>/dev/null`&.strip rescue ""
-  if wifi_ssid&.include?("Current Wi-Fi Network:")
-    ssid = wifi_ssid.split(":").last.strip
+  wifi_ssid = `networksetup -getairportnetwork en0 2>/dev/null`.strip rescue ""
+  if wifi_ssid.include?("Current Wi-Fi Network:")
+    ssid = wifi_ssid.split(":", 2).last.strip
     row "Wi-Fi SSID", ssid, GREEN
     row "Type", "Wi-Fi", GREEN
-  elsif wifi_ssid&.include?("not associated")
+  elsif wifi_ssid.include?("not associated")
     row "Type", "Ethernet (not on Wi-Fi)", CYAN
+  end
+elsif RUBY_PLATFORM.include?("linux")
+  ssid = nil
+  if system("command -v nmcli > /dev/null 2>&1")
+    ssid = `nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1=="yes" {print $2; exit}'`.strip rescue nil
+  end
+  if (ssid.nil? || ssid.empty?) && system("command -v iwgetid > /dev/null 2>&1")
+    ssid = `iwgetid -r 2>/dev/null`.strip rescue nil
+  end
+
+  if ssid && !ssid.empty?
+    row "Wi-Fi SSID", ssid, GREEN
+    row "Type", "Wi-Fi", GREEN
+  else
+    on_wifi = local_ips.map(&:first).any? { |i| i.start_with?("wl") }
+    row "Type", on_wifi ? "Wi-Fi (SSID unavailable)" : "Ethernet / wired", CYAN
   end
 end
 

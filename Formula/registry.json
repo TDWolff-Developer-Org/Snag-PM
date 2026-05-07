@@ -5,11 +5,11 @@
   "packages": {
     "myip": {
       "name": "myip",
-      "version": "1.0.0",
-      "description": "Detailed local and public IP info — location, ISP, DNS, Wi-Fi SSID, and more",
+      "version": "1.0.1",
+      "description": "Detailed local and public IP info — location, ISP, DNS, Wi-Fi SSID, and more (macOS + Linux)",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.0/myip-1.0.0.tar.gz",
-      "sha256": "46d418212fb206755ee31eac6b2cfc893ad97997580e04b8ecd043d0ed9e681e"
+      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.1/myip-1.0.1.tar.gz",
+      "sha256": "cc54ddb2d9feaab0acdbf162df3cba8d681403e499bb249204ece4298448ab1b"
     },
     "snagtools": {
       "name": "snagtools",

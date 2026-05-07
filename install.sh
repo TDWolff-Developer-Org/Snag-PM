@@ -8,6 +8,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
+DIM='\033[2m'
 
 step()  { echo -e "${BLUE}==>${RESET} ${BOLD}${1}${RESET}"; }
 ok()    { echo -e "${GREEN}✓${RESET} ${1}"; }
@@ -23,6 +24,7 @@ REGISTRY_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/
 echo
 echo -e "  ${CYAN}${BOLD}Snag${RESET} — simple package manager"
 echo -e "  ${BOLD}https://github.com/TDWolff-Developer-Org/Snag${RESET}"
+echo -e "  ${DIM}Supports macOS and Linux (x86_64, arm64)${RESET}"
 echo
 
 # ── Requirements ───────────────────────────────────────────────────────────────

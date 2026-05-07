@@ -1,10 +1,19 @@
 # Snag
 
-A simple, Homebrew-inspired package manager written in Ruby.
+A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** and **Linux**.
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/install.sh)"
 ```
+
+## Supported Platforms
+
+| OS | Architectures |
+|---|---|
+| macOS | `arm64`, `x86_64` |
+| Linux | `x86_64`, `arm64` |
+
+`snag version` prints the detected platform (e.g. `snag 1.0.3 [linux-x86_64]`). Per-package binaries can be published per platform via the `platforms` key in the registry — script packages stay universal.
 
 ## Features
 
@@ -25,8 +34,10 @@ A simple, Homebrew-inspired package manager written in Ruby.
 ## Installation
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/install.sh)"
 ```
+
+> **Note:** On minimal Linux systems, the `myip` package's Wi-Fi SSID detection requires `nmcli` (NetworkManager) or `iwgetid` (wireless-tools). Both are gracefully skipped if missing — public IP, local IPs, and DNS still work.
 
 The installer:
 1. Creates `~/.snag/` with `bin/` and `Cellar/` subdirectories

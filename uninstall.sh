@@ -44,9 +44,9 @@ fi
 remove_from_rc() {
   local rc_file="$1"
   if [ -f "${rc_file}" ] && grep -q '\.snag/bin' "${rc_file}" 2>/dev/null; then
-    # Remove the comment line and the PATH export line
-    sed -i '' '/# Snag package manager/d' "${rc_file}"
-    sed -i '' '/\.snag\/bin/d' "${rc_file}"
+    local tmp="${rc_file}.snag.tmp"
+    grep -v -e '# Snag package manager' -e '\.snag/bin' "${rc_file}" > "${tmp}"
+    mv "${tmp}" "${rc_file}"
     ok "Removed PATH entry from ${rc_file}"
   fi
 }
@@ -58,7 +58,9 @@ remove_from_rc "${HOME}/.bash_profile"
 
 FISH_CONFIG="${HOME}/.config/fish/config.fish"
 if [ -f "${FISH_CONFIG}" ] && grep -q '\.snag/bin' "${FISH_CONFIG}" 2>/dev/null; then
-  sed -i '' '/\.snag\/bin/d' "${FISH_CONFIG}"
+  tmp="${FISH_CONFIG}.snag.tmp"
+  grep -v '\.snag/bin' "${FISH_CONFIG}" > "${tmp}"
+  mv "${tmp}" "${FISH_CONFIG}"
   ok "Removed PATH entry from ${FISH_CONFIG}"
 fi
 
