@@ -3,7 +3,7 @@
 A simple, Homebrew-inspired package manager written in Ruby.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/latest/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/install.sh)"
 ```
 
 ## Features
