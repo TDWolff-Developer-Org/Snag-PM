@@ -19,6 +19,31 @@
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
       "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/snagtools-1.0.1/snagtools-1.0.1.tar.gz",
       "sha256": "3a4701263e4c760b02cd9a7e7da417ab3b3e332072d140b34053ab600c6ea432"
+    },
+    "ripgrep": {
+      "name": "ripgrep",
+      "version": "14.1.1",
+      "description": "Recursive line-oriented search with regex support — like grep, but faster",
+      "homepage": "https://github.com/BurntSushi/ripgrep",
+      "binaries": ["rg"],
+      "platforms": {
+        "darwin-arm64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-aarch64-apple-darwin.tar.gz",
+          "sha256": "24ad76777745fbff131c8fbc466742b011f925bfa4fffa2ded6def23b5b937be"
+        },
+        "darwin-x86_64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-apple-darwin.tar.gz",
+          "sha256": "fc87e78f7cb3fea12d69072e7ef3b21509754717b746368fd40d88963630e2b3"
+        },
+        "linux-x86_64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "c827481c4ff4ea10c9dc7a4022c8de5db34a5737cb74484d62eb94a95841ab2f"
+        }
+      }
     }
   }
 }

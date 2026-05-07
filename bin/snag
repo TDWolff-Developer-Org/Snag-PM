@@ -275,14 +275,31 @@ def install_resolved(name, packages, pinned_version = nil)
     ok "Extracted to #{dest_dir}"
   end
 
-  bin_dir = File.join(dest_dir, "bin")
-  if Dir.exist?(bin_dir)
-    Dir.each_child(bin_dir) do |bin|
-      src  = File.join(bin_dir, bin)
-      link = File.join(SNAG_BIN, bin)
+  if pkg["binaries"]
+    # Explicit binary list — used for third-party tarballs that don't have a bin/ dir
+    pkg["binaries"].each do |b|
+      src = File.join(dest_dir, b)
+      unless File.exist?(src)
+        warn "Binary not found in tarball: #{b}"
+        next
+      end
+      link_name = File.basename(b)
+      link = File.join(SNAG_BIN, link_name)
       FileUtils.chmod(0o755, src)
       FileUtils.ln_sf(src, link)
-      ok "Linked #{Color.cyan(bin)} → #{SNAG_BIN}/"
+      ok "Linked #{Color.cyan(link_name)} → #{SNAG_BIN}/"
+    end
+  else
+    # Default: symlink everything in bin/
+    bin_dir = File.join(dest_dir, "bin")
+    if Dir.exist?(bin_dir)
+      Dir.each_child(bin_dir) do |bin|
+        src  = File.join(bin_dir, bin)
+        link = File.join(SNAG_BIN, bin)
+        FileUtils.chmod(0o755, src)
+        FileUtils.ln_sf(src, link)
+        ok "Linked #{Color.cyan(bin)} → #{SNAG_BIN}/"
+      end
     end
   end
 
@@ -300,12 +317,25 @@ def cmd_uninstall(name)
   step "Uninstalling #{Color.bold(name)} #{version}"
   dest_dir = install_path(name, version)
 
-  bin_dir = File.join(dest_dir, "bin")
-  if Dir.exist?(bin_dir)
-    Dir.each_child(bin_dir) do |bin|
-      link = File.join(SNAG_BIN, bin)
+  packages = load_registry
+  pkg = packages[name]
+
+  if pkg && pkg["binaries"]
+    pkg["binaries"].each do |b|
+      link_name = File.basename(b)
+      link = File.join(SNAG_BIN, link_name)
+      next unless File.symlink?(link) || File.exist?(link)
       FileUtils.rm_f(link)
-      ok "Removed #{bin}"
+      ok "Removed #{link_name}"
+    end
+  else
+    bin_dir = File.join(dest_dir, "bin")
+    if Dir.exist?(bin_dir)
+      Dir.each_child(bin_dir) do |bin|
+        link = File.join(SNAG_BIN, bin)
+        FileUtils.rm_f(link)
+        ok "Removed #{bin}"
+      end
     end
   end
 
