@@ -630,6 +630,68 @@ def cmd_doctor
   puts
 end
 
+def cmd_self_uninstall
+  puts
+  puts "  #{Color.bold(Color.red("⚠  Uninstall Snag"))}"
+  puts
+  puts "  This will:"
+  puts "    • Remove #{SNAG_HOME}"
+  puts "    • Remove all installed packages"
+  puts "    • Strip PATH entries from your shell config"
+  puts
+  print "  Are you sure? [y/N] "
+  answer = $stdin.gets&.strip&.downcase
+  unless %w[y yes].include?(answer)
+    puts
+    info "Uninstall cancelled."
+    return
+  end
+
+  puts
+  print "  #{Color.yellow("Are you REALLY sure?")} This cannot be undone. [y/N] "
+  answer = $stdin.gets&.strip&.downcase
+  unless %w[y yes].include?(answer)
+    puts
+    info "Uninstall cancelled."
+    return
+  end
+
+  puts
+  step "Removing #{SNAG_HOME}"
+  if Dir.exist?(SNAG_HOME)
+    FileUtils.rm_rf(SNAG_HOME)
+    ok "Removed #{SNAG_HOME}"
+  else
+    warn "#{SNAG_HOME} does not exist"
+  end
+
+  step "Cleaning up shell config"
+  shell_files = [
+    File.expand_path("~/.zshrc"),
+    File.expand_path("~/.bashrc"),
+    File.expand_path("~/.bash_profile"),
+    File.expand_path("~/.config/fish/config.fish"),
+  ]
+
+  shell_files.each do |rc|
+    next unless File.exist?(rc)
+    content = File.read(rc)
+    new_content = content.lines.reject { |l|
+      l.include?(".snag/bin") || l.strip == "# Snag package manager"
+    }.join
+    new_content = new_content.gsub(/\n{3,}/, "\n\n")
+    if content != new_content
+      File.write(rc, new_content)
+      ok "Cleaned #{rc}"
+    end
+  end
+
+  puts
+  ok "Snag uninstalled."
+  info "Open a new terminal — the snag command will be gone."
+  puts
+end
+
 def cmd_version
   puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.cyan("[#{PLATFORM}]")}"
   puts "Home     : #{SNAG_HOME}"
@@ -655,6 +717,7 @@ def cmd_help
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
+    ["self-uninstall",      "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
   ]
@@ -695,6 +758,8 @@ when "update"
   cmd_update
 when "doctor"
   cmd_doctor
+when "self-uninstall", "--uninstall"
+  cmd_self_uninstall
 when "version", "--version", "-v"
   cmd_version
 when "help", "--help", "-h", nil
