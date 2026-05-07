@@ -108,7 +108,7 @@ esac
 step "Fetching package registry"
 if curl -fsSL "${REGISTRY_URL}" -o "${SNAG_HOME}/registry.json" 2>/dev/null; then
   PKG_COUNT=$(ruby -e "require 'json'; puts JSON.parse(File.read('${SNAG_HOME}/registry.json'))['packages'].size" 2>/dev/null || echo "?")
-  ok "Registry downloaded (${PKG_COUNT} packages)"
+  ok "Registry downloaded"
 else
   warn "Could not download registry now. Run 'snag update' after installation."
 fi
