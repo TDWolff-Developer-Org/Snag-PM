@@ -27,9 +27,13 @@ A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** a
 
 ## Requirements
 
-- Ruby 2.7+ (macOS ships with Ruby; install via `brew install ruby` for a newer version)
+- Ruby 2.7+
+  - **macOS:** ships with Ruby; install a newer version via `brew install ruby`
+  - **Linux (Ubuntu/Debian):** `sudo apt install ruby curl`
+  - **Linux (Fedora/RHEL):** `sudo dnf install ruby curl`
+  - **Linux (Arch):** `sudo pacman -S ruby curl`
 - `tar` (pre-installed on macOS and Linux)
-- `curl` (pre-installed on macOS and Linux)
+- `curl` (pre-installed on macOS, install above on minimal Linux)
 
 ## Installation
 
@@ -48,9 +52,8 @@ The installer:
 Reload your shell or run `source ~/.zshrc` (or `~/.bashrc`), then try:
 
 ```bash
-snag list
-snag install hello
-hello
+snag install myip
+myip
 ```
 
 ## Usage
@@ -62,36 +65,56 @@ snag <command> [package]
 | Command | Description |
 |---|---|
 | `snag install <package>` | Download and install a package |
+| `snag install <package>@<version>` | Pin a specific version |
 | `snag uninstall <package>` | Remove an installed package |
-| `snag list` | List all available packages |
-| `snag installed` | Show installed packages |
+| `snag upgrade [package]` | Upgrade one package or all installed packages |
+| `snag outdated` | Show installed packages with newer versions available |
+| `snag list` | List installed packages |
 | `snag search <query>` | Search packages by name or description |
-| `snag info <package>` | Show package details and SHA256 |
-| `snag update` | Refresh registry + self-update snag |
-| `snag version` | Print version and paths |
+| `snag info <package>` | Show package details, version, and SHA256 |
+| `snag update` | Refresh registry, self-update snag, and upgrade installed packages |
+| `snag doctor` | Check your snag installation for problems |
+| `snag self-uninstall` | Completely remove snag from this machine (double-confirm prompt) |
+| `snag version` | Print version, platform, and paths |
 | `snag help` | Show help |
+
+If you typo a package name (e.g. `snag install snadtools`), snag suggests the closest match.
 
 ### Examples
 
 ```bash
 # Install a package
-snag install quickserve
+snag install myip
 
-# Serve the current directory on port 3000
-quickserve -p 3000
+# Run it
+myip
 
-# Install colorcat and use it
-snag install colorcat
-colorcat myfile.rb
+# Install a developer toolkit
+snag install snagtools
+snagtools cat myfile.rb         # syntax-highlighted file viewer
+snagtools json --validate x.json
+snagtools hex /usr/bin/ruby
 
-# Check what's installed
-snag installed
+# Pin a specific version
+snag install snagtools@1.0.1
 
-# Remove a package
-snag uninstall hello
+# See what's installed
+snag list
 
-# Update everything
+# See what has updates available
+snag outdated
+
+# Upgrade everything that's outdated
+snag upgrade
+
+# Refresh registry, self-update snag, and upgrade all in one go
 snag update
+
+# Remove a single package
+snag uninstall myip
+
+# Wipe snag completely (double-confirm prompt)
+snag self-uninstall
 ```
 
 ## How it works
@@ -102,14 +125,14 @@ snag update
 ~/.snag/
 ├── bin/               ← symlinks to installed executables (add to PATH)
 ├── Cellar/
-│   ├── hello/
-│   │   └── 1.0.0/
+│   ├── myip/
+│   │   └── 1.0.1/
 │   │       └── bin/
-│   │           └── hello
-│   └── quickserve/
-│       └── 1.0.0/
+│   │           └── myip
+│   └── snagtools/
+│       └── 1.0.1/
 │           └── bin/
-│               └── quickserve
+│               └── snagtools
 └── registry.json      ← local copy of the package registry
 ```
 
@@ -118,9 +141,9 @@ snag update
 Each package is a `.tar.gz` archive hosted on GitHub Releases. Inside:
 
 ```
-hello-1.0.0/
+myip-1.0.1/
 └── bin/
-    └── hello      ← the executable(s)
+    └── myip          ← the executable(s)
 ```
 
 `snag install` downloads the archive, verifies the SHA256, extracts it to
@@ -130,16 +153,34 @@ hello-1.0.0/
 ### Registry
 
 The registry lives at `Formula/registry.json` in this repo and is fetched to
-`~/.snag/registry.json` by `snag update`. Each entry looks like:
+`~/.snag/registry.json` by `snag update`. The top-level `snag_version` field
+drives self-updates of the snag binary itself. A script-style entry looks like:
 
 ```json
 {
-  "name": "hello",
-  "version": "1.0.0",
-  "description": "A friendly greeting program",
+  "name": "myip",
+  "version": "1.0.1",
+  "description": "Detailed local and public IP info",
   "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
-  "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/hello-1.0.0/hello-1.0.0.tar.gz",
+  "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.1/myip-1.0.1.tar.gz",
   "sha256": "abc123..."
+}
+```
+
+A binary package with per-platform builds uses a `platforms` map instead of
+top-level `url`/`sha256`:
+
+```json
+{
+  "name": "mytool",
+  "version": "1.0.0",
+  "description": "...",
+  "platforms": {
+    "darwin-arm64":  { "url": "...", "sha256": "..." },
+    "darwin-x86_64": { "url": "...", "sha256": "..." },
+    "linux-x86_64":  { "url": "...", "sha256": "..." },
+    "linux-arm64":   { "url": "...", "sha256": "..." }
+  }
 }
 ```
 
@@ -147,9 +188,8 @@ The registry lives at `Formula/registry.json` in this repo and is fetched to
 
 | Package | Description |
 |---|---|
-| `hello` | Classic Hello, World! greeting program |
-| `quickserve` | Instantly serve any directory over HTTP |
-| `colorcat` | `cat` with syntax highlighting for Ruby, Python, JS, Shell, JSON |
+| `myip` | Detailed local and public IP info — interfaces, ISP, DNS, Wi-Fi SSID, geolocation (macOS + Linux) |
+| `snagtools` | Developer toolkit: syntax-highlighted `cat`, JSON pretty-printer/validator, hex dump |
 
 ## Adding your own package
 
@@ -169,23 +209,31 @@ Quick version:
 ├── bin/
 │   └── snag               ← the CLI itself
 ├── examples/
-│   ├── hello/hello
-│   ├── quickserve/quickserve
-│   └── colorcat/colorcat
+│   ├── myip/myip
+│   └── snagtools/snagtools
 ├── Formula/
-│   └── registry.json      ← package registry
+│   └── registry.json      ← package registry (with snag_version)
 ├── dist/                  ← built tarballs (git-ignored)
 ├── build.rb               ← packaging helper script
-└── install.sh             ← one-line installer
+├── install.sh             ← one-line installer
+└── uninstall.sh           ← bash uninstaller (alternative to `snag self-uninstall`)
 ```
 
 ## Uninstalling Snag
 
+The clean way (built into snag, with a double-confirm prompt):
+
 ```bash
-rm -rf ~/.snag
+snag self-uninstall
 ```
 
-Then remove the `~/.snag/bin` line from your shell config (`~/.zshrc` or `~/.bashrc`).
+Or run the bash uninstaller from the repo:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/uninstall.sh)"
+```
+
+Either method removes `~/.snag` and strips the `~/.snag/bin` PATH entry from your shell config.
 
 ## License
 
