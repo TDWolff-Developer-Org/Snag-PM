@@ -8,7 +8,7 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.3-ag"
+SNAG_VERSION  = "1.0.3-ah"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -136,26 +136,26 @@ end
 
 # --- Install ledger (~/.snag/installed.json) ---
 
-# Reads the install ledger, backfilling any package present in Cellar that
-# isn't tracked yet. Backfilled entries default to "explicit" so packages
-# installed before the ledger existed are never auto-removed as orphans.
+# Pure read of the ledger. No filesystem inference — that lives in
+# migrate_installed_ledger which runs exactly once.
 def load_installed
-  data = if File.exist?(INSTALLED_PATH)
-    JSON.parse(File.read(INSTALLED_PATH)) rescue {}
-  else
-    {}
-  end
+  return {} unless File.exist?(INSTALLED_PATH)
+  JSON.parse(File.read(INSTALLED_PATH)) rescue {}
+end
 
-  if Dir.exist?(SNAG_CELLAR)
-    Dir.children(SNAG_CELLAR).each do |pkg|
-      v = installed_version(pkg)
-      next unless v
-      next if data[pkg]
-      data[pkg] = { "version" => v, "installed_as" => "explicit" }
-    end
+# One-time migration: if installed.json doesn't exist yet but Cellar already
+# has packages, mark them all as "explicit" so they're never auto-orphaned.
+# Idempotent — re-running after the file exists is a no-op.
+def migrate_installed_ledger
+  return if File.exist?(INSTALLED_PATH)
+  return unless Dir.exist?(SNAG_CELLAR)
+  data = {}
+  Dir.children(SNAG_CELLAR).each do |pkg|
+    v = installed_version(pkg)
+    next unless v
+    data[pkg] = { "version" => v, "installed_as" => "explicit" }
   end
-
-  data
+  save_installed(data) unless data.empty?
 end
 
 def save_installed(data)
@@ -1041,6 +1041,8 @@ def cmd_help
 end
 
 # --- Entry point ---
+
+migrate_installed_ledger
 
 command  = ARGV[0]
 argument = ARGV[1]
