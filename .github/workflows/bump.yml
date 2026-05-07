@@ -1,0 +1,58 @@
+name: Bump tracked packages
+
+on:
+  schedule:
+    # Every Monday at 12:00 UTC. Tweak the cron if you prefer a different time.
+    - cron: '0 12 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Run bump.rb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ruby bump.rb
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- Formula/registry.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff Formula/registry.json
+          fi
+
+      - name: Open PR with bumps
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: bump/auto
+          delete-branch: true
+          base: latest
+          commit-message: "Auto-bump tracked packages"
+          title: "Auto-bump tracked packages"
+          body: |
+            Automated upstream version bumps from `bump.rb`.
+
+            Each entry in the registry with an `auto_bump` block was checked
+            against its upstream's `releases/latest` API endpoint. URLs and
+            SHA256s have been refreshed for any package whose upstream tag
+            no longer matches the registered version.
+
+            Review the diff and merge if everything looks right.
