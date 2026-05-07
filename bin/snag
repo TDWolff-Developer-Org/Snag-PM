@@ -45,6 +45,26 @@ end
 
 NO_CACHE_HEADERS = { "Cache-Control" => "no-cache", "Pragma" => "no-cache" }.freeze
 
+def current_platform
+  os  = `uname -s 2>/dev/null`.strip.downcase
+  cpu = `uname -m 2>/dev/null`.strip.downcase
+  os  = case os
+        when "darwin" then "darwin"
+        when "linux"  then "linux"
+        else os
+        end
+  cpu = case cpu
+        when "arm64", "aarch64" then "arm64"
+        when "x86_64", "amd64"  then "x86_64"
+        else cpu
+        end
+  "#{os}-#{cpu}"
+rescue
+  "unknown"
+end
+
+PLATFORM = current_platform.freeze
+
 def fetch_url(url, limit = 5)
   raise "Too many redirects" if limit == 0
   uri = URI.parse(url)
@@ -176,6 +196,22 @@ def cmd_install(name, pinned_version = nil)
     return
   end
 
+  # Resolve URL and SHA256 — platform-specific binary or universal script
+  if pkg["platforms"]
+    platform_data = pkg["platforms"][PLATFORM]
+    unless platform_data
+      supported = pkg["platforms"].keys.join(", ")
+      error "#{name} is not available for #{PLATFORM}."
+      info  "Supported platforms: #{supported}"
+      exit 1
+    end
+    pkg_url    = platform_data["url"]
+    pkg_sha256 = platform_data["sha256"]
+  else
+    pkg_url    = pkg["url"]
+    pkg_sha256 = pkg["sha256"]
+  end
+
   step "Installing #{Color.bold(name)} #{version}"
   info pkg["description"]
   puts
@@ -186,10 +222,10 @@ def cmd_install(name, pinned_version = nil)
 
   Dir.mktmpdir do |tmp|
     tarball = File.join(tmp, "#{name}-#{version}.tar.gz")
-    download_file(pkg["url"], tarball)
+    download_file(pkg_url, tarball)
     puts
 
-    unless verify_sha256(tarball, pkg["sha256"])
+    unless verify_sha256(tarball, pkg_sha256)
       FileUtils.rm_rf(dest_dir)
       exit 1
     end
@@ -301,8 +337,21 @@ def cmd_info(name)
   puts "  Description : #{pkg["description"]}"
   puts "  Version     : #{pkg["version"]}"
   puts "  Homepage    : #{pkg["homepage"] || "N/A"}"
-  puts "  URL         : #{pkg["url"]}"
-  puts "  SHA256      : #{pkg["sha256"]}"
+  if pkg["platforms"]
+    puts "  Type        : binary"
+    puts "  Platforms   : #{pkg["platforms"].keys.join(", ")}"
+    pdata = pkg["platforms"][PLATFORM]
+    if pdata
+      puts "  URL         : #{pdata["url"]}"
+      puts "  SHA256      : #{pdata["sha256"]}"
+    else
+      puts "  #{Color.yellow("Not available for #{PLATFORM}")}"
+    end
+  else
+    puts "  Type        : script"
+    puts "  URL         : #{pkg["url"]}"
+    puts "  SHA256      : #{pkg["sha256"]}"
+  end
   puts "  Installed   : #{installed ? Color.green(installed) : Color.yellow("No")}"
   puts
 end
@@ -581,10 +630,11 @@ def cmd_doctor
 end
 
 def cmd_version
-  puts "#{Color.bold("snag")} #{SNAG_VERSION}"
-  puts "Home    : #{SNAG_HOME}"
-  puts "Cellar  : #{SNAG_CELLAR}"
-  puts "Binary  : #{__FILE__}"
+  puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.cyan("[#{PLATFORM}]")}"
+  puts "Home     : #{SNAG_HOME}"
+  puts "Cellar   : #{SNAG_CELLAR}"
+  puts "Binary   : #{__FILE__}"
+  puts "Platform : #{PLATFORM}"
 end
 
 def cmd_help
