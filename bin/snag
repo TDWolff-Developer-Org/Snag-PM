@@ -8,7 +8,7 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.3-lad"
+SNAG_VERSION  = "1.0.3-lae"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -877,6 +877,190 @@ def cmd_version
   puts "Platform : #{PLATFORM}"
 end
 
+# Hidden subcommands used by shell completion scripts.
+def cmd_packages_list
+  puts load_registry.keys.sort.join("\n")
+end
+
+def cmd_installed_list
+  return unless Dir.exist?(SNAG_CELLAR)
+  pkgs = Dir.children(SNAG_CELLAR).select { |d| Dir.exist?(File.join(SNAG_CELLAR, d)) }.sort
+  puts pkgs.join("\n")
+end
+
+COMPLETION_BASH = <<~'BASH'
+  # snag completion for bash
+  _snag_completions() {
+    local cur prev cmds opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    cmds="install uninstall upgrade outdated list search info update doctor cleanup self-uninstall completions version help"
+
+    if [ "${COMP_CWORD}" -eq 1 ]; then
+      COMPREPLY=( $(compgen -W "${cmds}" -- "${cur}") )
+    elif [ "${COMP_CWORD}" -eq 2 ]; then
+      case "${prev}" in
+        install|info|search|upgrade)
+          opts=$(snag _packages 2>/dev/null)
+          COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+          ;;
+        uninstall|remove|rm)
+          opts=$(snag _installed 2>/dev/null)
+          COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+          ;;
+        completions)
+          COMPREPLY=( $(compgen -W "bash zsh fish" -- "${cur}") )
+          ;;
+        cleanup)
+          COMPREPLY=( $(compgen -W "--dry-run" -- "${cur}") )
+          ;;
+      esac
+    fi
+
+    if [ ${#COMPREPLY[@]} -gt 20 ]; then
+      COMPREPLY=( "${COMPREPLY[@]:0:20}" "...(more)" )
+    fi
+  }
+  complete -F _snag_completions snag
+BASH
+
+COMPLETION_ZSH = <<~'ZSH'
+  #compdef snag
+  # snag completion for zsh
+
+  _snag() {
+    local -a cmds packages installed shells
+    cmds=(
+      'install:Download and install a package'
+      'uninstall:Remove an installed package'
+      'upgrade:Upgrade a package or all installed'
+      'outdated:Show outdated installed packages'
+      'list:List installed packages'
+      'search:Search packages'
+      'info:Show package info'
+      'update:Refresh registry and self-update'
+      'doctor:Check installation health'
+      'cleanup:Remove old versions and broken symlinks'
+      'self-uninstall:Completely remove snag'
+      'completions:Print shell completion script'
+      'version:Print version info'
+      'help:Show help'
+    )
+
+    _arguments -C \
+      '1:command:->cmds' \
+      '2:argument:->args'
+
+    case $state in
+      cmds)
+        _describe 'command' cmds
+        ;;
+      args)
+        case $words[2] in
+          install|info|search|upgrade)
+            packages=( ${(f)"$(snag _packages 2>/dev/null)"} )
+            packages=( ${packages[1,20]} )
+            _describe 'package' packages
+            ;;
+          uninstall|remove|rm)
+            installed=( ${(f)"$(snag _installed 2>/dev/null)"} )
+            installed=( ${installed[1,20]} )
+            _describe 'installed package' installed
+            ;;
+          completions)
+            shells=(bash zsh fish)
+            _describe 'shell' shells
+            ;;
+          cleanup)
+            _values 'flag' '--dry-run[Preview without removing]'
+            ;;
+        esac
+        ;;
+    esac
+  }
+
+  _snag "$@"
+ZSH
+
+COMPLETION_FISH = <<~'FISH'
+  # snag completion for fish
+
+  function __snag_packages
+    snag _packages 2>/dev/null | head -n 20
+  end
+
+  function __snag_installed
+    snag _installed 2>/dev/null | head -n 20
+  end
+
+  function __snag_no_command
+    set -l cmd (commandline -opc)
+    test (count $cmd) -eq 1
+  end
+
+  function __snag_using_command
+    set -l cmd (commandline -opc)
+    test (count $cmd) -ge 2; and contains -- $cmd[2] $argv
+  end
+
+  complete -c snag -f
+  complete -c snag -n __snag_no_command -a 'install'        -d 'Install a package'
+  complete -c snag -n __snag_no_command -a 'uninstall'      -d 'Remove an installed package'
+  complete -c snag -n __snag_no_command -a 'upgrade'        -d 'Upgrade a package or all'
+  complete -c snag -n __snag_no_command -a 'outdated'       -d 'Show outdated packages'
+  complete -c snag -n __snag_no_command -a 'list'           -d 'List installed packages'
+  complete -c snag -n __snag_no_command -a 'search'         -d 'Search packages'
+  complete -c snag -n __snag_no_command -a 'info'           -d 'Show package info'
+  complete -c snag -n __snag_no_command -a 'update'         -d 'Refresh registry'
+  complete -c snag -n __snag_no_command -a 'doctor'         -d 'Check installation health'
+  complete -c snag -n __snag_no_command -a 'cleanup'        -d 'Remove old versions/symlinks'
+  complete -c snag -n __snag_no_command -a 'self-uninstall' -d 'Remove snag entirely'
+  complete -c snag -n __snag_no_command -a 'completions'    -d 'Print completion script'
+  complete -c snag -n __snag_no_command -a 'version'        -d 'Print version'
+  complete -c snag -n __snag_no_command -a 'help'           -d 'Show help'
+
+  complete -c snag -n '__snag_using_command install info search upgrade' -a '(__snag_packages)'
+  complete -c snag -n '__snag_using_command uninstall remove rm'         -a '(__snag_installed)'
+  complete -c snag -n '__snag_using_command completions'                 -a 'bash zsh fish'
+  complete -c snag -n '__snag_using_command cleanup'                     -a '--dry-run' -d 'Preview without removing'
+FISH
+
+def cmd_completions(shell)
+  case shell
+  when "bash"
+    puts COMPLETION_BASH
+  when "zsh"
+    puts COMPLETION_ZSH
+  when "fish"
+    puts COMPLETION_FISH
+  when nil, "", "help", "-h", "--help"
+    puts
+    info "Generate shell completion scripts."
+    puts
+    puts "  #{Color.bold("Usage:")} snag completions <shell>"
+    puts
+    puts "  #{Color.bold("Shells:")} bash, zsh, fish"
+    puts
+    puts "  #{Color.bold("Install:")}"
+    puts "    #{Color.cyan("# bash")}"
+    puts "    snag completions bash > ~/.snag-completion.bash"
+    puts "    echo 'source ~/.snag-completion.bash' >> ~/.bashrc"
+    puts
+    puts "    #{Color.cyan("# zsh")}"
+    puts "    mkdir -p ~/.zsh/completions"
+    puts "    snag completions zsh > ~/.zsh/completions/_snag"
+    puts "    # ensure ~/.zshrc has: fpath=(~/.zsh/completions $fpath); autoload -U compinit; compinit"
+    puts
+    puts "    #{Color.cyan("# fish")}"
+    puts "    snag completions fish > ~/.config/fish/completions/snag.fish"
+    puts
+  else
+    error "Unknown shell '#{shell}'. Supported: bash, zsh, fish."
+    exit 1
+  end
+end
+
 def cmd_help
   puts
   puts "  #{Color.bold(Color.cyan("snag"))} #{SNAG_VERSION} — a simple package manager"
@@ -895,6 +1079,7 @@ def cmd_help
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
     ["cleanup [--dry-run]",  "Remove old versions, broken symlinks, and temp files"],
+    ["completions <shell>",  "Print shell completion script (bash | zsh | fish)"],
     ["self-uninstall",      "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
@@ -938,6 +1123,12 @@ when "doctor"
   cmd_doctor
 when "cleanup"
   cmd_cleanup(argument == "--dry-run")
+when "completions"
+  cmd_completions(argument)
+when "_packages"
+  cmd_packages_list
+when "_installed"
+  cmd_installed_list
 when "self-uninstall", "--uninstall"
   cmd_self_uninstall
 when "version", "--version", "-v"
