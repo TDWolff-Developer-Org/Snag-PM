@@ -116,11 +116,11 @@
       "platforms": {
         "linux-x86_64": {
           "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.1/shortcut-1.0.1-linux-x86_64.tar.gz",
-          "sha256": "PLACEHOLDER_RUN_build.rb_TO_GENERATE"
+          "sha256": "d7ba1c68bb23a6431275cc640494ac15a71c341007a3087126720aa555cf545a"
         },
         "linux-arm64": {
           "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.1/shortcut-1.0.1-linux-arm64.tar.gz",
-          "sha256": "PLACEHOLDER_RUN_build.rb_TO_GENERATE"
+          "sha256": "651d14e5f450720c511732fe2c0fb804c63fa808a8924a1a40e6464901c205e5"
         }
       },
       "sha256": "241e15a6bdb11b1daf719711277a6f88cdc1dfbd96ea19f49ab10f9c129d6f69"
