@@ -1,0 +1,140 @@
+name: Build shortcut
+
+on:
+  push:
+    tags:
+      - 'shortcut-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 1.0.0). Used only for workflow_dispatch runs; tag pushes derive it from the tag name.'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#shortcut-}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install aarch64 cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build linux-x86_64
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          STAGE="build/x86_64/shortcut-${VERSION}-linux-x86_64"
+          mkdir -p "${STAGE}/bin"
+          gcc -static -O2 -std=c99 -Wall -Wextra \
+            -o "${STAGE}/bin/shortcut" examples/shortcut/shortcut.c
+          file "${STAGE}/bin/shortcut"
+          mkdir -p dist
+          tar -czf "dist/shortcut-${VERSION}-linux-x86_64.tar.gz" -C build/x86_64 "shortcut-${VERSION}-linux-x86_64"
+
+      - name: Build linux-arm64
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          STAGE="build/arm64/shortcut-${VERSION}-linux-arm64"
+          mkdir -p "${STAGE}/bin"
+          aarch64-linux-gnu-gcc -static -O2 -std=c99 -Wall -Wextra \
+            -o "${STAGE}/bin/shortcut" examples/shortcut/shortcut.c
+          file "${STAGE}/bin/shortcut"
+          mkdir -p dist
+          tar -czf "dist/shortcut-${VERSION}-linux-arm64.tar.gz" -C build/arm64 "shortcut-${VERSION}-linux-arm64"
+
+      - name: Compute SHA256s
+        id: sha
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          SHA_X86=$(sha256sum "dist/shortcut-${VERSION}-linux-x86_64.tar.gz" | awk '{print $1}')
+          SHA_ARM=$(sha256sum "dist/shortcut-${VERSION}-linux-arm64.tar.gz" | awk '{print $1}')
+          echo "sha_x86=${SHA_X86}" >> "$GITHUB_OUTPUT"
+          echo "sha_arm=${SHA_ARM}" >> "$GITHUB_OUTPUT"
+          echo
+          echo "================ SHA256 ================"
+          echo "linux-x86_64: ${SHA_X86}"
+          echo "linux-arm64:  ${SHA_ARM}"
+          echo "========================================"
+
+      - name: Create / update GitHub Release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/shortcut-')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: shortcut ${{ steps.version.outputs.version }}
+          files: |
+            dist/shortcut-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz
+            dist/shortcut-${{ steps.version.outputs.version }}-linux-arm64.tar.gz
+          body: |
+            Linux .desktop creator built from `examples/shortcut/shortcut.c`.
+
+            **SHA256**
+            - `linux-x86_64` — `${{ steps.sha.outputs.sha_x86 }}`
+            - `linux-arm64`  — `${{ steps.sha.outputs.sha_arm }}`
+
+      - name: Patch registry with new SHAs
+        if: startsWith(github.ref, 'refs/tags/shortcut-')
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_X86: ${{ steps.sha.outputs.sha_x86 }}
+          SHA_ARM: ${{ steps.sha.outputs.sha_arm }}
+        run: |
+          ruby <<'RUBY'
+          require 'json'
+          path = 'Formula/registry.json'
+          reg = JSON.parse(File.read(path))
+          pkg = reg.dig('packages', 'shortcut') or abort "shortcut entry missing from registry"
+          version = ENV.fetch('VERSION')
+          old_version = pkg['version']
+          pkg['version'] = version
+          plats = pkg['platforms'] ||= {}
+          ['linux-x86_64', 'linux-arm64'].each do |p|
+            plats[p] ||= {}
+            plats[p]['url'] = "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-#{version}/shortcut-#{version}-#{p}.tar.gz"
+          end
+          plats['linux-x86_64']['sha256'] = ENV.fetch('SHA_X86')
+          plats['linux-arm64']['sha256']  = ENV.fetch('SHA_ARM')
+          reg['updated'] = Time.now.utc.strftime('%Y-%m-%d')
+          File.write(path, JSON.pretty_generate(reg) + "\n")
+          puts "Patched #{path}: #{old_version} -> #{version}"
+          RUBY
+
+      - name: Open PR with registry update
+        if: startsWith(github.ref, 'refs/tags/shortcut-')
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.BUMP_PAT || secrets.GITHUB_TOKEN }}
+          branch: shortcut/release-${{ steps.version.outputs.version }}
+          delete-branch: true
+          base: latest
+          commit-message: "Release shortcut ${{ steps.version.outputs.version }}"
+          title: "Release shortcut ${{ steps.version.outputs.version }}"
+          body: |
+            Automated registry update from the `Build shortcut` workflow run for tag `${{ github.ref_name }}`.
+
+            - Bumped `shortcut.version` to `${{ steps.version.outputs.version }}`
+            - Refreshed URLs for `linux-x86_64` and `linux-arm64`
+            - Refreshed SHA256s:
+              - `linux-x86_64` — `${{ steps.sha.outputs.sha_x86 }}`
+              - `linux-arm64`  — `${{ steps.sha.outputs.sha_arm }}`
+
+            Merge after spot-checking the diff.

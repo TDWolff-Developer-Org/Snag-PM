@@ -99,6 +99,22 @@
           "sha256": "6c51f7c5446b3338b1e401ff15dc194c590bb2fa64fd43ff3278300f073adec5"
         }
       }
+    },
+    "shortcut": {
+      "name": "shortcut",
+      "version": "1.0.0",
+      "description": "Create Linux .desktop shortcuts in ~/.local/share/applications (Linux only)",
+      "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
+      "platforms": {
+        "linux-x86_64": {
+          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.0/shortcut-1.0.0-linux-x86_64.tar.gz",
+          "sha256": "PLACEHOLDER_x86_64"
+        },
+        "linux-arm64": {
+          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.0/shortcut-1.0.0-linux-arm64.tar.gz",
+          "sha256": "PLACEHOLDER_arm64"
+        }
+      }
     }
   }
 }
