@@ -8,13 +8,14 @@ require 'digest'
 require 'uri'
 require 'tmpdir'
 
-SNAG_VERSION  = "1.0.4-a"
+SNAG_VERSION  = "1.0.4-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
 REGISTRY_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/Formula/registry.json"
 REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
 INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
+ALIASES_PATH   = File.join(SNAG_HOME, "aliases.json")
 SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
 
 module Color
@@ -201,6 +202,95 @@ def find_orphans
   installed.keys.select do |name|
     installed[name]["installed_as"] == "dependency" && !needed.include?(name)
   end.sort
+end
+
+# --- Alias ledger (~/.snag/aliases.json) ---
+
+def load_aliases
+  return {} unless File.exist?(ALIASES_PATH)
+  JSON.parse(File.read(ALIASES_PATH)) rescue {}
+end
+
+def save_aliases(data)
+  ensure_dirs
+  File.write(ALIASES_PATH, JSON.pretty_generate(data) + "\n")
+end
+
+def cmd_alias(package, alias_name)
+  if package.nil?
+    cmd_aliases
+    return
+  end
+
+  if alias_name.nil?
+    error "Usage: snag alias <package> <alias>"
+    info  "       snag alias               (list all aliases)"
+    exit 1
+  end
+
+  src_link = File.join(SNAG_BIN, package)
+  unless File.exist?(src_link) || File.symlink?(src_link)
+    error "'#{package}' is not an installed binary."
+    info  "Run 'snag list' to see what's installed."
+    exit 1
+  end
+
+  real_target = File.realpath(src_link) rescue src_link
+
+  alias_link = File.join(SNAG_BIN, alias_name)
+  if File.exist?(alias_link) || File.symlink?(alias_link)
+    existing = load_aliases
+    if existing.key?(alias_name)
+      error "'#{alias_name}' is already an alias for '#{existing[alias_name]["package"]}'."
+      info  "Run 'snag unalias #{alias_name}' first if you want to replace it."
+    else
+      error "'#{alias_name}' already exists in ~/.snag/bin/ and is not a snag alias."
+    end
+    exit 1
+  end
+
+  FileUtils.ln_sf(real_target, alias_link)
+
+  aliases = load_aliases
+  aliases[alias_name] = { "package" => package, "target" => real_target }
+  save_aliases(aliases)
+
+  ok "#{Color.cyan(alias_name)} → #{Color.cyan(package)}"
+  info "You can now run: #{Color.bold(alias_name)}"
+end
+
+def cmd_aliases
+  aliases = load_aliases
+  if aliases.empty?
+    puts "No aliases defined."
+    info "Create one with: #{Color.cyan("snag alias <package> <name>")}"
+    return
+  end
+
+  puts "#{Color.bold("Aliases:")} (#{aliases.size} total)"
+  puts
+  aliases.sort_by { |k, _| k }.each do |name, data|
+    link   = File.join(SNAG_BIN, name)
+    active = File.exist?(link) || (File.symlink?(link) && File.exist?(link))
+    status = active ? Color.green("active") : Color.red("broken")
+    puts "  #{Color.cyan(name.ljust(18))} → #{data["package"]} [#{status}]"
+  end
+  puts
+end
+
+def cmd_unalias(alias_name)
+  aliases = load_aliases
+  unless aliases.key?(alias_name)
+    error "'#{alias_name}' is not a known alias."
+    info  "Run 'snag alias' to list all aliases."
+    exit 1
+  end
+
+  FileUtils.rm_f(File.join(SNAG_BIN, alias_name))
+  aliases.delete(alias_name)
+  save_aliases(aliases)
+
+  ok "Alias #{Color.cyan(alias_name)} removed."
 end
 
 # --- Commands ---
@@ -426,6 +516,26 @@ def cmd_uninstall(name)
   end
 
   uninstall_one(name)
+
+  # Warn about aliases that now point at nothing
+  all_aliases = load_aliases
+  affected    = all_aliases.select { |_, v| v["package"] == name }
+  if affected.any?
+    puts
+    warn "Aliases pointing to #{Color.cyan(name)}: #{affected.keys.map { |a| Color.cyan(a) }.join(", ")}"
+    print "  Remove them too? [y/N] "
+    answer = $stdin.gets&.strip&.downcase
+    if %w[y yes].include?(answer)
+      affected.each_key do |a|
+        FileUtils.rm_f(File.join(SNAG_BIN, a))
+        all_aliases.delete(a)
+        ok "Removed alias #{Color.cyan(a)}"
+      end
+      save_aliases(all_aliases)
+    else
+      info "Left as broken symlinks. Run 'snag unalias <name>' to clean up later."
+    end
+  end
 
   orphans = find_orphans
   return if orphans.empty?
@@ -783,13 +893,15 @@ def cmd_cleanup(dry_run = false)
   end
   ok "No old versions to clean" if removed_versions == 0
 
-  # 2. Broken symlinks in bin/
+  # 2. Broken symlinks in bin/ (alias symlinks are handled separately below)
   puts
   step "Broken symlinks"
+  alias_names = load_aliases.keys
   broken = []
   if Dir.exist?(SNAG_BIN)
     Dir.each_child(SNAG_BIN) do |f|
       next if f == "snag"
+      next if alias_names.include?(f)
       link = File.join(SNAG_BIN, f)
       broken << f if File.symlink?(link) && !File.exist?(link)
     end
@@ -805,7 +917,30 @@ def cmd_cleanup(dry_run = false)
     end
   end
 
-  # 3. Temp files
+  # 3. Dangling aliases
+  puts
+  step "Dangling aliases"
+  all_aliases = load_aliases
+  dangling = all_aliases.select { |aname, _|
+    link = File.join(SNAG_BIN, aname)
+    File.symlink?(link) && !File.exist?(link)
+  }
+  if dangling.empty?
+    ok "No dangling aliases"
+  else
+    dangling.each do |aname, data|
+      if dry_run
+        info "Would remove dangling alias #{Color.cyan(aname)} (was → #{data["package"]})"
+      else
+        FileUtils.rm_f(File.join(SNAG_BIN, aname))
+        all_aliases.delete(aname)
+        ok "Removed dangling alias #{Color.cyan(aname)}"
+      end
+    end
+    save_aliases(all_aliases) unless dry_run
+  end
+
+  # 4. Temp files
   puts
   step "Temporary files"
   tmp_files = Dir.glob(File.join(SNAG_HOME, "*.tmp"))
@@ -889,17 +1024,32 @@ def cmd_doctor
     end
   end
 
-  # No broken symlinks in bin
+  # No broken symlinks in bin (skip aliases — checked separately)
+  doc_alias_names = load_aliases.keys
   broken = []
   if Dir.exist?(SNAG_BIN)
     Dir.each_child(SNAG_BIN) do |f|
       next if f == "snag"
+      next if doc_alias_names.include?(f)
       link = File.join(SNAG_BIN, f)
       broken << f if File.symlink?(link) && !File.exist?(link)
     end
   end
   check.call("No broken symlinks in ~/.snag/bin") do
     broken.empty? ? [true, nil] : [false, "broken: #{broken.join(", ")} — run 'snag uninstall' and reinstall"]
+  end
+
+  # No dangling aliases
+  dangling_aliases = load_aliases.select { |aname, _|
+    link = File.join(SNAG_BIN, aname)
+    File.symlink?(link) && !File.exist?(link)
+  }
+  check.call("No dangling aliases") do
+    if dangling_aliases.empty?
+      [true, nil]
+    else
+      [false, "dangling: #{dangling_aliases.keys.join(", ")} — run 'snag cleanup' or 'snag unalias <name>'"]
+    end
   end
 
   # Installed packages have their binaries
@@ -1021,9 +1171,12 @@ def cmd_help
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
-    ["cleanup [--dry-run]",  "Remove old versions, broken symlinks, and temp files"],
-    ["autoremove",           "Remove dependencies no longer required by any explicit package"],
-    ["self-uninstall",      "Completely remove snag from this machine"],
+    ["alias <package> <name>", "Create a short alias for an installed binary"],
+    ["alias",                  "List all aliases"],
+    ["unalias <name>",         "Remove an alias"],
+    ["cleanup [--dry-run]",    "Remove old versions, broken symlinks, and temp files"],
+    ["autoremove",             "Remove dependencies no longer required by any explicit package"],
+    ["self-uninstall",         "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
   ]
@@ -1068,6 +1221,12 @@ when "doctor"
   cmd_doctor
 when "cleanup"
   cmd_cleanup(argument == "--dry-run")
+when "alias"
+  cmd_alias(argument, ARGV[2])
+when "aliases"
+  cmd_aliases
+when "unalias"
+  argument ? cmd_unalias(argument) : (error "Usage: snag unalias <name>"; exit 1)
 when "autoremove"
   cmd_autoremove
 when "self-uninstall", "--uninstall"
