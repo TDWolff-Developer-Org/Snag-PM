@@ -72,6 +72,9 @@ snag <command> [package]
 | `snag list` | List installed packages |
 | `snag search <query>` | Search packages by name or description |
 | `snag info <package>` | Show package details, version, and SHA256 |
+| `snag alias <package> <name>` | Create a short alias for an installed binary |
+| `snag alias` | List all aliases |
+| `snag unalias <name>` | Remove an alias |
 | `snag update` | Refresh registry, self-update snag, and upgrade installed packages |
 | `snag doctor` | Check your snag installation for problems |
 | `snag self-uninstall` | Completely remove snag from this machine (double-confirm prompt) |
