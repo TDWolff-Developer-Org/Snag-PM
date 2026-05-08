@@ -5,22 +5,22 @@
   "packages": {
     "myip": {
       "name": "myip",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Detailed local and public IP info — location, ISP, DNS, Wi-Fi SSID, and more (macOS + Linux)",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
       "depends_on": [
         "snagtools"
       ],
-      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.1/myip-1.0.1.tar.gz",
-      "sha256": "cc54ddb2d9feaab0acdbf162df3cba8d681403e499bb249204ece4298448ab1b"
+      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/myip-1.0.2/myip-1.0.2.tar.gz",
+      "sha256": "251e1479e225ff4686860164760e6c93e617781d3bd06bee81961a76028b95e3"
     },
     "snagtools": {
       "name": "snagtools",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Developer toolkit — syntax-highlighted cat, JSON pretty-printer, and hex dump",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
-      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/snagtools-1.0.1/snagtools-1.0.1.tar.gz",
-      "sha256": "3a4701263e4c760b02cd9a7e7da417ab3b3e332072d140b34053ab600c6ea432"
+      "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/snagtools-1.0.2/snagtools-1.0.2.tar.gz",
+      "sha256": "e4b87d27d04844de4ba22b1b9c9e8abc83859893bf3557737b95dfe366c7fd23"
     },
     "ripgrep": {
       "name": "ripgrep",
@@ -110,19 +110,20 @@
     },
     "shortcut": {
       "name": "shortcut",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Create Linux .desktop shortcuts in ~/.local/share/applications (Linux only)",
       "homepage": "https://github.com/TDWolff-Developer-Org/Snag",
       "platforms": {
         "linux-x86_64": {
-          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.0/shortcut-1.0.0-linux-x86_64.tar.gz",
-          "sha256": "ed98df008c45af886973a8bc0d93f4a0ae9295c79d61068a5c8d4d9ae0fbca99"
+          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.1/shortcut-1.0.1-linux-x86_64.tar.gz",
+          "sha256": "PLACEHOLDER_RUN_build.rb_TO_GENERATE"
         },
         "linux-arm64": {
-          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.0/shortcut-1.0.0-linux-arm64.tar.gz",
-          "sha256": "36bea4702bf05cc66e80ccbfb0866c0286e8310f019ac86b5a608939124fcc56"
+          "url": "https://github.com/TDWolff-Developer-Org/Snag/releases/download/shortcut-1.0.1/shortcut-1.0.1-linux-arm64.tar.gz",
+          "sha256": "PLACEHOLDER_RUN_build.rb_TO_GENERATE"
         }
-      }
+      },
+      "sha256": "241e15a6bdb11b1daf719711277a6f88cdc1dfbd96ea19f49ab10f9c129d6f69"
     }
   }
 }

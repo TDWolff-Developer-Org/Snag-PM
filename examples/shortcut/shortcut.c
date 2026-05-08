@@ -23,14 +23,41 @@
 #define PATH_MAX 4096
 #endif
 
+#define SHORTCUT_VERSION "1.0.1"
+
+static void print_version(void) {
+    printf("shortcut %s\n", SHORTCUT_VERSION);
+}
+
+static void print_help(void) {
+    printf(
+        "shortcut %s — create a Linux .desktop launcher entry\n"
+        "\n"
+        "Usage:\n"
+        "  shortcut <exec_path> <name> [icon_path]\n"
+        "\n"
+        "Arguments:\n"
+        "  exec_path   Path to the program to launch\n"
+        "  name        Display name shown in the application launcher\n"
+        "  icon_path   Optional path to an icon image (.png, .svg, etc.)\n"
+        "\n"
+        "Options:\n"
+        "  -h, --help      Show this help\n"
+        "  -v, --version   Print version and exit\n"
+        "\n"
+        "Examples:\n"
+        "  shortcut /usr/bin/firefox Firefox\n"
+        "  shortcut ~/apps/myapp MyApp ~/icons/myapp.png\n"
+        "\n"
+        "The .desktop file is written to ~/.local/share/applications/ and\n"
+        "picked up automatically by GNOME, KDE, and most other desktops.\n",
+        SHORTCUT_VERSION);
+}
+
 static void usage(void) {
     fprintf(stderr,
         "Usage: shortcut <exec_path> <name> [icon_path]\n"
-        "\n"
-        "  Creates a .desktop entry in ~/.local/share/applications/.\n"
-        "  exec_path  — path to the program to launch\n"
-        "  name       — display name in the application launcher\n"
-        "  icon_path  — optional absolute or relative path to an icon image\n");
+        "       shortcut --help for full usage\n");
     exit(2);
 }
 
@@ -74,6 +101,19 @@ static void sanitize_filename(const char *name, char *out, size_t out_size) {
 }
 
 int main(int argc, char *argv[]) {
+    if (argc >= 2) {
+        if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0 ||
+            strcmp(argv[1], "help") == 0) {
+            print_help();
+            return 0;
+        }
+        if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0 ||
+            strcmp(argv[1], "version") == 0) {
+            print_version();
+            return 0;
+        }
+    }
+
     if (argc < 3 || argc > 4) usage();
 
     const char *exec_arg  = argv[1];

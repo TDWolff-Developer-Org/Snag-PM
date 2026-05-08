@@ -5,6 +5,8 @@ require 'net/http'
 require 'json'
 require 'socket'
 
+MYIP_VERSION = "1.0.2"
+
 RESET  = "\e[0m"
 BOLD   = "\e[1m"
 DIM    = "\e[2m"
@@ -29,7 +31,7 @@ def fetch_json(url)
   uri = URI.parse(url)
   response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https',
                              open_timeout: 5, read_timeout: 5) do |http|
-    http.get(uri.request_uri, "User-Agent" => "myip/1.0")
+    http.get(uri.request_uri, "User-Agent" => "myip/#{MYIP_VERSION}")
   end
   return nil unless response.code == "200"
   JSON.parse(response.body)
@@ -37,140 +39,173 @@ rescue
   nil
 end
 
-# ── Local network info ──────────────────────────────────────────────────────────
-
-header "Local Network"
-
-hostname = Socket.gethostname
-row "Hostname", hostname, CYAN
-
-local_ips = Socket.getifaddrs
-  .reject { |i| i.addr.nil? }
-  .select { |i| i.addr.ipv4? || i.addr.ipv6? }
-  .reject { |i| i.name == "lo0" || i.name == "lo" }
-  .map    { |i| [i.name, i.addr.ip_address] }
-
-if local_ips.empty?
-  row "Local IP", "none found", YELLOW
-else
-  local_ips.each do |iface, ip|
-    row "Local IP (#{iface})", ip, GREEN
-  end
+def cmd_help
+  puts
+  puts "  #{BOLD}#{CYAN}myip#{RESET} #{MYIP_VERSION} — show detailed network and IP information"
+  puts
+  puts "  #{BOLD}Usage:#{RESET} myip [options]"
+  puts
+  puts "  #{BOLD}Options:#{RESET}"
+  puts "    #{CYAN}-h, --help#{RESET}       Show this help"
+  puts "    #{CYAN}-v, --version#{RESET}    Print version and exit"
+  puts
+  puts "  #{BOLD}Output sections:#{RESET}"
+  puts "    Local Network    Hostname, local IPs per interface, default interface"
+  puts "    Public IP        IP address, ISP, city, country, coordinates, VPN hint"
+  puts "    DNS Servers      Primary and secondary DNS with provider labels"
+  puts "    Connection       Wi-Fi SSID or connection type (macOS + Linux)"
+  puts
+  puts "  #{BOLD}Examples:#{RESET}"
+  puts "    myip"
+  puts "    myip --version"
+  puts
 end
 
-# Default gateway interface
-default_iface = if RUBY_PLATFORM.include?("darwin")
-  `route get default 2>/dev/null | awk '/interface:/ {print $2}'`.strip rescue nil
-else
-  `ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}'`.strip rescue nil
-end
-default_iface = nil if default_iface.nil? || default_iface.empty?
-row "Default interface", default_iface || "unknown", WHITE if default_iface
+def cmd_run
+  # ── Local network info ──────────────────────────────────────────────────────────
 
-# ── Public IP info ──────────────────────────────────────────────────────────────
+  header "Local Network"
 
-header "Public IP"
+  hostname = Socket.gethostname
+  row "Hostname", hostname, CYAN
 
-data = fetch_json("https://ipapi.co/json/")
+  local_ips = Socket.getifaddrs
+    .reject { |i| i.addr.nil? }
+    .select { |i| i.addr.ipv4? || i.addr.ipv6? }
+    .reject { |i| i.name == "lo0" || i.name == "lo" }
+    .map    { |i| [i.name, i.addr.ip_address] }
 
-if data.nil? || data["error"]
-  # Fallback: just get the IP from a simpler service
-  begin
-    ip = Net::HTTP.get(URI("https://api.ipify.org")).strip
-    row "Public IP", ip, GREEN
-    row "Details", "unavailable (rate limited — try again shortly)", YELLOW
-  rescue
-    row "Public IP", "unavailable — check your connection", RED
-  end
-else
-  ip      = data["ip"]
-  org     = data["org"]
-  isp     = data["org"]
-  city    = data["city"]
-  region  = data["region"]
-  country = data["country_name"]
-  postal  = data["postal"]
-  tz      = data["timezone"]
-  lat     = data["latitude"]
-  lon     = data["longitude"]
-  vpn_hint = org&.match?(/vpn|proxy|hosting|cloud|digital.ocean|linode|vultr|aws|google|azure/i)
-
-  row "Public IP",  ip,                                   GREEN
-  row "ISP / Org",  isp || "unknown",                     WHITE
-  row "City",       city || "unknown",                    WHITE
-  row "Region",     region || "unknown",                  WHITE
-  row "Country",    country || "unknown",                 WHITE
-  row "Postal",     postal || "unknown",                  WHITE
-  row "Timezone",   tz || "unknown",                      WHITE
-  row "Coordinates","#{lat}, #{lon}",                     DIM + WHITE if lat && lon
-  row "Maps link",  "https://maps.google.com/?q=#{lat},#{lon}", DIM + CYAN if lat && lon
-
-  if vpn_hint
-    puts
-    puts "  #{YELLOW}#{BOLD}⚠  VPN or hosting provider detected#{RESET}"
-  end
-end
-
-# ── DNS ─────────────────────────────────────────────────────────────────────────
-
-header "DNS Servers"
-
-dns_servers = []
-
-if RUBY_PLATFORM.include?("darwin")
-  scutil_out = `scutil --dns 2>/dev/null` rescue ""
-  dns_servers = scutil_out.scan(/nameserver\[\d+\]\s*:\s*([\d\.a-f:]+)/).flatten.uniq
-else
-  resolv = File.readlines("/etc/resolv.conf") rescue []
-  dns_servers = resolv.grep(/^nameserver/).map { |l| l.split[1] }.compact.uniq
-end
-
-if dns_servers.empty?
-  row "DNS", "could not detect", YELLOW
-else
-  dns_servers.first(4).each_with_index do |dns, i|
-    label = i == 0 ? "Primary DNS" : "DNS #{i + 1}"
-    # Known DNS provider labels
-    name = case dns
-    when "1.1.1.1", "1.0.0.1"           then " #{DIM}(Cloudflare)#{RESET}"
-    when "8.8.8.8", "8.8.4.4"           then " #{DIM}(Google)#{RESET}"
-    when "9.9.9.9", "149.112.112.112"   then " #{DIM}(Quad9)#{RESET}"
-    when "208.67.222.222","208.67.220.220" then " #{DIM}(OpenDNS)#{RESET}"
-    else ""
-    end
-    row label, "#{dns}#{name}", CYAN
-  end
-end
-
-# ── Connection type hint ────────────────────────────────────────────────────────
-
-header "Connection"
-
-if RUBY_PLATFORM.include?("darwin")
-  wifi_ssid = `networksetup -getairportnetwork en0 2>/dev/null`.strip rescue ""
-  if wifi_ssid.include?("Current Wi-Fi Network:")
-    ssid = wifi_ssid.split(":", 2).last.strip
-    row "Wi-Fi SSID", ssid, GREEN
-    row "Type", "Wi-Fi", GREEN
-  elsif wifi_ssid.include?("not associated")
-    row "Type", "Ethernet (not on Wi-Fi)", CYAN
-  end
-elsif RUBY_PLATFORM.include?("linux")
-  ssid = nil
-  if system("command -v nmcli > /dev/null 2>&1")
-    ssid = `nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1=="yes" {print $2; exit}'`.strip rescue nil
-  end
-  if (ssid.nil? || ssid.empty?) && system("command -v iwgetid > /dev/null 2>&1")
-    ssid = `iwgetid -r 2>/dev/null`.strip rescue nil
-  end
-
-  if ssid && !ssid.empty?
-    row "Wi-Fi SSID", ssid, GREEN
-    row "Type", "Wi-Fi", GREEN
+  if local_ips.empty?
+    row "Local IP", "none found", YELLOW
   else
-    on_wifi = local_ips.map(&:first).any? { |i| i.start_with?("wl") }
-    row "Type", on_wifi ? "Wi-Fi (SSID unavailable)" : "Ethernet / wired", CYAN
+    local_ips.each do |iface, ip|
+      row "Local IP (#{iface})", ip, GREEN
+    end
   end
+
+  # Default gateway interface
+  default_iface = if RUBY_PLATFORM.include?("darwin")
+    `route get default 2>/dev/null | awk '/interface:/ {print $2}'`.strip rescue nil
+  else
+    `ip route show default 2>/dev/null | awk '/^default/ {print $5; exit}'`.strip rescue nil
+  end
+  default_iface = nil if default_iface.nil? || default_iface.empty?
+  row "Default interface", default_iface || "unknown", WHITE if default_iface
+
+  # ── Public IP info ──────────────────────────────────────────────────────────────
+
+  header "Public IP"
+
+  data = fetch_json("https://ipapi.co/json/")
+
+  if data.nil? || data["error"]
+    begin
+      ip = Net::HTTP.get(URI("https://api.ipify.org")).strip
+      row "Public IP", ip, GREEN
+      row "Details", "unavailable (rate limited — try again shortly)", YELLOW
+    rescue
+      row "Public IP", "unavailable — check your connection", RED
+    end
+  else
+    ip      = data["ip"]
+    org     = data["org"]
+    isp     = data["org"]
+    city    = data["city"]
+    region  = data["region"]
+    country = data["country_name"]
+    postal  = data["postal"]
+    tz      = data["timezone"]
+    lat     = data["latitude"]
+    lon     = data["longitude"]
+    vpn_hint = org&.match?(/vpn|proxy|hosting|cloud|digital.ocean|linode|vultr|aws|google|azure/i)
+
+    row "Public IP",   ip,                                    GREEN
+    row "ISP / Org",   isp || "unknown",                      WHITE
+    row "City",        city || "unknown",                     WHITE
+    row "Region",      region || "unknown",                   WHITE
+    row "Country",     country || "unknown",                  WHITE
+    row "Postal",      postal || "unknown",                   WHITE
+    row "Timezone",    tz || "unknown",                       WHITE
+    row "Coordinates", "#{lat}, #{lon}",                      DIM + WHITE if lat && lon
+    row "Maps link",   "https://maps.google.com/?q=#{lat},#{lon}", DIM + CYAN if lat && lon
+
+    if vpn_hint
+      puts
+      puts "  #{YELLOW}#{BOLD}⚠  VPN or hosting provider detected#{RESET}"
+    end
+  end
+
+  # ── DNS ─────────────────────────────────────────────────────────────────────────
+
+  header "DNS Servers"
+
+  dns_servers = []
+
+  if RUBY_PLATFORM.include?("darwin")
+    scutil_out = `scutil --dns 2>/dev/null` rescue ""
+    dns_servers = scutil_out.scan(/nameserver\[\d+\]\s*:\s*([\d\.a-f:]+)/).flatten.uniq
+  else
+    resolv = File.readlines("/etc/resolv.conf") rescue []
+    dns_servers = resolv.grep(/^nameserver/).map { |l| l.split[1] }.compact.uniq
+  end
+
+  if dns_servers.empty?
+    row "DNS", "could not detect", YELLOW
+  else
+    dns_servers.first(4).each_with_index do |dns, i|
+      label = i == 0 ? "Primary DNS" : "DNS #{i + 1}"
+      name = case dns
+      when "1.1.1.1", "1.0.0.1"              then " #{DIM}(Cloudflare)#{RESET}"
+      when "8.8.8.8", "8.8.4.4"              then " #{DIM}(Google)#{RESET}"
+      when "9.9.9.9", "149.112.112.112"      then " #{DIM}(Quad9)#{RESET}"
+      when "208.67.222.222","208.67.220.220"  then " #{DIM}(OpenDNS)#{RESET}"
+      else ""
+      end
+      row label, "#{dns}#{name}", CYAN
+    end
+  end
+
+  # ── Connection type hint ────────────────────────────────────────────────────────
+
+  header "Connection"
+
+  if RUBY_PLATFORM.include?("darwin")
+    wifi_ssid = `networksetup -getairportnetwork en0 2>/dev/null`.strip rescue ""
+    if wifi_ssid.include?("Current Wi-Fi Network:")
+      ssid = wifi_ssid.split(":", 2).last.strip
+      row "Wi-Fi SSID", ssid, GREEN
+      row "Type", "Wi-Fi", GREEN
+    elsif wifi_ssid.include?("not associated")
+      row "Type", "Ethernet (not on Wi-Fi)", CYAN
+    end
+  elsif RUBY_PLATFORM.include?("linux")
+    ssid = nil
+    if system("command -v nmcli > /dev/null 2>&1")
+      ssid = `nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1=="yes" {print $2; exit}'`.strip rescue nil
+    end
+    if (ssid.nil? || ssid.empty?) && system("command -v iwgetid > /dev/null 2>&1")
+      ssid = `iwgetid -r 2>/dev/null`.strip rescue nil
+    end
+
+    if ssid && !ssid.empty?
+      row "Wi-Fi SSID", ssid, GREEN
+      row "Type", "Wi-Fi", GREEN
+    else
+      on_wifi = local_ips.map(&:first).any? { |i| i.start_with?("wl") }
+      row "Type", on_wifi ? "Wi-Fi (SSID unavailable)" : "Ethernet / wired", CYAN
+    end
+  end
+
+  puts
 end
 
-puts
+# ── Entry point ─────────────────────────────────────────────────────────────────
+
+case ARGV[0]
+when "version", "--version", "-v"
+  puts "myip #{MYIP_VERSION}"
+when "help", "--help", "-h"
+  cmd_help
+else
+  cmd_run
+end
