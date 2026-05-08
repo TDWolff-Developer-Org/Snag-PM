@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "snag_version": "1.0.5-ingrid",
+  "snag_version": "1.0.6-ingrid",
   "updated": "2026-05-08",
   "packages": {
     "myip": {
@@ -105,6 +105,36 @@
         "linux-arm64": {
           "url": "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-aarch64-unknown-linux-gnu.tar.gz",
           "sha256": "6c51f7c5446b3338b1e401ff15dc194c590bb2fa64fd43ff3278300f073adec5"
+        }
+      }
+    },
+    "zig": {
+      "name": "zig",
+      "version": "0.14.0",
+      "description": "A general-purpose programming language and toolchain for maintaining robust, optimal, and reusable software",
+      "homepage": "https://ziglang.org",
+      "auto_bump": {
+        "github_repo": "ziglang/zig"
+      },
+      "binaries": [
+        "zig"
+      ],
+      "platforms": {
+        "darwin-arm64": {
+          "url": "https://ziglang.org/download/0.14.0/zig-macos-aarch64-0.14.0.tar.xz",
+          "sha256": "b71e4b7c4b4be9953657877f7f9e6f7ee89114c716da7c070f4a238220e95d7e"
+        },
+        "darwin-x86_64": {
+          "url": "https://ziglang.org/download/0.14.0/zig-macos-x86_64-0.14.0.tar.xz",
+          "sha256": "685816166f21f0b8d6fc7aa6a36e91396dcd82ca6556dfbe3e329deffc01fec3"
+        },
+        "linux-x86_64": {
+          "url": "https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz",
+          "sha256": "473ec26806133cf4d1918caf1a410f8403a13d979726a9045b421b685031a982"
+        },
+        "linux-arm64": {
+          "url": "https://ziglang.org/download/0.14.0/zig-linux-aarch64-0.14.0.tar.xz",
+          "sha256": "ab64e3ea277f6fc5f3d723dcd95d9ce1ab282c8ed0f431b4de880d30df891e4f"
         }
       }
     },
