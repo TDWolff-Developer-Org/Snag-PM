@@ -184,13 +184,6 @@ top-level `url`/`sha256`:
 }
 ```
 
-## Included packages
-
-| Package | Description |
-|---|---|
-| `myip` | Detailed local and public IP info — interfaces, ISP, DNS, Wi-Fi SSID, geolocation (macOS + Linux) |
-| `snagtools` | Developer toolkit: syntax-highlighted `cat`, JSON pretty-printer/validator, hex dump |
-
 ## Adding your own package
 
 See [SETUP.md](SETUP.md) for a full walkthrough.
