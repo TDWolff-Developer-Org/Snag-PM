@@ -237,4 +237,4 @@ Either method removes `~/.snag` and strips the `~/.snag/bin` PATH entry from you
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+CC0-1.0 — see [LICENSE](LICENSE).
