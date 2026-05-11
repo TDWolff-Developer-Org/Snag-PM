@@ -1321,7 +1321,7 @@ def cmd_help
   puts
   puts "  #{Color.bold(Color.cyan("snag"))} #{SNAG_VERSION} — a simple package manager"
   puts 
-  puts " #{Color.bold("About:")} Snag is a simple developer friendly package manager for small command-line tools. It installs packages as self-contained units, each with its own version and dependencies, and links their binaries into a single directory on your PATH."
+  puts "  #{Color.bold("About:")} Snag is a simple developer friendly package manager for small command-line tools. It installs packages as self-contained units, each with its own version and dependencies, and links their binaries into a single directory on your PATH."
   puts
   puts "  #{Color.bold("Usage:")} snag <command> [package]"
   puts
