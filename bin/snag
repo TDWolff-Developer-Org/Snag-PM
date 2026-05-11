@@ -120,7 +120,7 @@ def verify_sha256(path, expected)
     ok "SHA256 verified"
     true
   else
-    error "SHA256 mismatch!"
+    error "SHA256 mismatch"
     info "Expected: #{expected}"
     info "Got:      #{actual}"
     false
