@@ -9,7 +9,7 @@ require 'uri'
 require 'tmpdir'
 require 'shellwords'
 
-SNAG_VERSION  = "1.0.8-ingrid"
+SNAG_VERSION  = "1.0.9-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -615,7 +615,9 @@ def cmd_list
 end
 
 def cmd_search(query = nil)
-  packages = load_registry
+  packages = load_registry.select do |_, pkg|
+    pkg["platforms"].nil? || pkg["platforms"].key?(PLATFORM)
+  end
   show_all = query.nil? || query == "*"
 
   results = if show_all
