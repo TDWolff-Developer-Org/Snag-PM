@@ -9,7 +9,7 @@ require 'uri'
 require 'tmpdir'
 require 'shellwords'
 
-SNAG_VERSION  = "1.0.9-ingrid"
+SNAG_VERSION  = "1.1.0-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -19,6 +19,7 @@ INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
 ALIASES_PATH   = File.join(SNAG_HOME, "aliases.json")
 SNAG_VENVS     = File.join(SNAG_HOME, "venvs").freeze
 SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
+SNAG_CONTENT_HASH = Digest::SHA256.file(__FILE__).hexdigest.freeze
 
 module Color
   RESET  = "\e[0m"
@@ -785,11 +786,13 @@ def cmd_update
                   "-H", "Pragma: no-cache",
                   REGISTRY_URL, "-o", registry_tmp)
   remote_snag_version = nil
+  remote_snag_sha256  = nil
   if result && File.exist?(registry_tmp)
     begin
       parsed = JSON.parse(File.read(registry_tmp))
       pkg_count = parsed["packages"]&.size || 0
       remote_snag_version = parsed["snag_version"]
+      remote_snag_sha256  = parsed["snag_sha256"]
       FileUtils.mv(registry_tmp, REGISTRY_PATH)
       ok "Registry updated"
     rescue JSON::ParserError
@@ -805,12 +808,21 @@ def cmd_update
 
   puts
   step "Checking for snag updates"
-  if remote_snag_version.nil?
-    warn "Registry has no snag_version field — skipping self-update check"
-  elsif remote_snag_version == SNAG_VERSION
-    ok "snag #{SNAG_VERSION} is up to date"
+  up_to_date = if remote_snag_sha256
+    remote_snag_sha256 == SNAG_CONTENT_HASH
+  elsif remote_snag_version
+    remote_snag_version == SNAG_VERSION
   else
-    info "Updating snag #{Color.yellow(SNAG_VERSION)} → #{Color.green(remote_snag_version)}"
+    warn "Registry has no snag_sha256 or snag_version field — skipping self-update check"
+    true
+  end
+
+  if up_to_date
+    ok "snag #{SNAG_VERSION} +#{SNAG_CONTENT_HASH[0..6]} is up to date"
+  else
+    label_from = "+#{SNAG_CONTENT_HASH[0..6]}"
+    label_to   = remote_snag_sha256 ? "+#{remote_snag_sha256[0..6]}" : remote_snag_version
+    info "Updating snag #{Color.yellow(label_from)} → #{Color.green(label_to)}"
     begin
       snag_tmp = File.join(SNAG_HOME, "snag.tmp")
       result = system("curl", "-fsSL",
@@ -821,7 +833,7 @@ def cmd_update
 
       FileUtils.mv(snag_tmp, __FILE__)
       FileUtils.chmod(0o755, __FILE__)
-      ok "snag updated to #{remote_snag_version}!"
+      ok "snag updated!"
     rescue => e
       FileUtils.rm_f(snag_tmp) rescue nil
       warn "Could not self-update: #{e.message}"
@@ -1296,7 +1308,7 @@ def cmd_venv(action, name = nil)
 end
 
 def cmd_version
-  puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.cyan("[#{PLATFORM}]")}"
+  puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.dim("+#{SNAG_CONTENT_HASH[0..6]}")} #{Color.cyan("[#{PLATFORM}]")}"
   puts "Home     : #{SNAG_HOME}"
   puts "Cellar   : #{effective_cellar}"
   puts "Binary   : #{__FILE__}"
