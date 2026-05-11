@@ -103,6 +103,48 @@ case "${CURRENT_SHELL}" in
     ;;
 esac
 
+# ── Venv shell function ────────────────────────────────────────────────────────
+
+VENV_MARKER='# snag venv shell integration'
+VENV_SHELL_FN='snag() {
+  if [[ "$1" == "venv" && ( "$2" == "activate" || "$2" == "deactivate" ) ]]; then
+    eval "$(command snag "$@" --shell-eval)"
+  else
+    command snag "$@"
+  fi
+}'
+
+add_venv_fn_to_rc() {
+  local rc_file="$1"
+  if grep -q 'snag venv shell integration' "${rc_file}" 2>/dev/null; then
+    warn "snag venv shell function already in ${rc_file}"
+  else
+    printf '\n%s\n%s\n' "${VENV_MARKER}" "${VENV_SHELL_FN}" >> "${rc_file}"
+    ok "Added snag venv shell function to ${rc_file}"
+  fi
+}
+
+step "Installing venv shell function"
+case "${CURRENT_SHELL}" in
+  zsh)
+    add_venv_fn_to_rc "${HOME}/.zshrc"
+    ;;
+  bash)
+    if [[ -f "${HOME}/.bash_profile" ]]; then
+      add_venv_fn_to_rc "${HOME}/.bash_profile"
+    else
+      add_venv_fn_to_rc "${HOME}/.bashrc"
+    fi
+    ;;
+  *)
+    warn "Add the following shell function to your shell config for 'snag venv activate/deactivate' to work:"
+    echo
+    echo "    ${VENV_MARKER}"
+    echo "    ${VENV_SHELL_FN}"
+    echo
+    ;;
+esac
+
 # ── Fetch registry ─────────────────────────────────────────────────────────────
 
 step "Fetching package registry"
@@ -128,4 +170,10 @@ echo -e "  Then try:"
 echo -e "    ${CYAN}snag list${RESET}"
 echo -e "    ${CYAN}snag install myip${RESET}"
 echo -e "    ${CYAN}myip${RESET}"
+echo
+echo -e "  ${BOLD}Venv usage:${RESET}"
+echo -e "    ${CYAN}snag venv new myproject${RESET}"
+echo -e "    ${CYAN}snag venv activate myproject${RESET}"
+echo -e "    ${CYAN}snag install ripgrep${RESET}   ${DIM}# installs into myproject venv${RESET}"
+echo -e "    ${CYAN}snag venv deactivate${RESET}"
 echo

@@ -7,8 +7,9 @@ require 'fileutils'
 require 'digest'
 require 'uri'
 require 'tmpdir'
+require 'shellwords'
 
-SNAG_VERSION  = "1.0.6-ingrid"
+SNAG_VERSION  = "1.0.7-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -16,6 +17,7 @@ REGISTRY_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/re
 REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
 INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
 ALIASES_PATH   = File.join(SNAG_HOME, "aliases.json")
+SNAG_VENVS     = File.join(SNAG_HOME, "venvs").freeze
 SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
 
 module Color
@@ -27,12 +29,15 @@ module Color
   CYAN   = "\e[36m"
   BOLD   = "\e[1m"
 
+  DIM    = "\e[2m"
+
   def self.red(s)    = "#{RED}#{s}#{RESET}"
   def self.green(s)  = "#{GREEN}#{s}#{RESET}"
   def self.yellow(s) = "#{YELLOW}#{s}#{RESET}"
   def self.blue(s)   = "#{BLUE}#{s}#{RESET}"
   def self.cyan(s)   = "#{CYAN}#{s}#{RESET}"
   def self.bold(s)   = "#{BOLD}#{s}#{RESET}"
+  def self.dim(s)    = "#{DIM}#{s}#{RESET}"
 end
 
 def step(msg)  = puts("#{Color.blue("==>")} #{Color.bold(msg)}")
@@ -42,8 +47,16 @@ def error(msg) = puts("#{Color.red("✗")} #{msg}")
 def info(msg)  = puts("  #{msg}")
 
 def ensure_dirs
-  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR].each { |d| FileUtils.mkdir_p(d) }
+  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR, SNAG_VENVS].each { |d| FileUtils.mkdir_p(d) }
+  if active_venv
+    [effective_bin, effective_cellar].each { |d| FileUtils.mkdir_p(d) }
+  end
 end
+
+def active_venv      = ENV["SNAG_VENV"]
+def effective_bin    = active_venv ? File.join(SNAG_VENVS, active_venv, "bin")           : SNAG_BIN
+def effective_cellar = active_venv ? File.join(SNAG_VENVS, active_venv, "Cellar")        : SNAG_CELLAR
+def effective_installed = active_venv ? File.join(SNAG_VENVS, active_venv, "installed.json") : INSTALLED_PATH
 
 NO_CACHE_HEADERS = { "Cache-Control" => "no-cache", "Pragma" => "no-cache" }.freeze
 
@@ -125,14 +138,14 @@ rescue JSON::ParserError
 end
 
 def installed_version(name)
-  dir = File.join(SNAG_CELLAR, name)
+  dir = File.join(effective_cellar, name)
   return nil unless Dir.exist?(dir)
   versions = Dir.children(dir).sort
   versions.last
 end
 
 def install_path(name, version)
-  File.join(SNAG_CELLAR, name, version)
+  File.join(effective_cellar, name, version)
 end
 
 # --- Install ledger (~/.snag/installed.json) ---
@@ -140,8 +153,8 @@ end
 # Pure read of the ledger. No filesystem inference — that lives in
 # migrate_installed_ledger which runs exactly once.
 def load_installed
-  return {} unless File.exist?(INSTALLED_PATH)
-  JSON.parse(File.read(INSTALLED_PATH)) rescue {}
+  return {} unless File.exist?(effective_installed)
+  JSON.parse(File.read(effective_installed)) rescue {}
 end
 
 # One-time migration: if installed.json doesn't exist yet but Cellar already
@@ -150,6 +163,7 @@ end
 def migrate_installed_ledger
   return if File.exist?(INSTALLED_PATH)
   return unless Dir.exist?(SNAG_CELLAR)
+  return if active_venv
   data = {}
   Dir.children(SNAG_CELLAR).each do |pkg|
     v = installed_version(pkg)
@@ -161,7 +175,7 @@ end
 
 def save_installed(data)
   ensure_dirs
-  File.write(INSTALLED_PATH, JSON.pretty_generate(data) + "\n")
+  File.write(effective_installed, JSON.pretty_generate(data) + "\n")
 end
 
 def mark_installed(name, version, reason)
@@ -228,7 +242,7 @@ def cmd_alias(package, alias_name)
     exit 1
   end
 
-  src_link = File.join(SNAG_BIN, package)
+  src_link = File.join(effective_bin, package)
   unless File.exist?(src_link) || File.symlink?(src_link)
     error "'#{package}' is not an installed binary."
     info  "Run 'snag list' to see what's installed."
@@ -237,7 +251,7 @@ def cmd_alias(package, alias_name)
 
   real_target = File.realpath(src_link) rescue src_link
 
-  alias_link = File.join(SNAG_BIN, alias_name)
+  alias_link = File.join(effective_bin, alias_name)
   if File.exist?(alias_link) || File.symlink?(alias_link)
     existing = load_aliases
     if existing.key?(alias_name)
@@ -270,7 +284,7 @@ def cmd_aliases
   puts "#{Color.bold("Aliases:")} (#{aliases.size} total)"
   puts
   aliases.sort_by { |k, _| k }.each do |name, data|
-    link   = File.join(SNAG_BIN, name)
+    link   = File.join(effective_bin, name)
     active = File.exist?(link) || (File.symlink?(link) && File.exist?(link))
     status = active ? Color.green("active") : Color.red("broken")
     puts "  #{Color.cyan(name.ljust(18))} → #{data["package"]} [#{status}]"
@@ -286,7 +300,7 @@ def cmd_unalias(alias_name)
     exit 1
   end
 
-  FileUtils.rm_f(File.join(SNAG_BIN, alias_name))
+  FileUtils.rm_f(File.join(effective_bin, alias_name))
   aliases.delete(alias_name)
   save_aliases(aliases)
 
@@ -409,7 +423,7 @@ def install_resolved(name, packages, pinned_version = nil, reason = "explicit")
     pkg_sha256 = pkg["sha256"]
   end
 
-  step "Installing #{Color.bold(name)} #{version}"
+  step "Installing #{Color.bold(name)} #{version}#{active_venv ? Color.dim(" [venv: #{active_venv}]") : ""}"
   info pkg["description"]
   puts
 
@@ -447,10 +461,10 @@ def install_resolved(name, packages, pinned_version = nil, reason = "explicit")
         next
       end
       link_name = File.basename(b)
-      link = File.join(SNAG_BIN, link_name)
+      link = File.join(effective_bin, link_name)
       FileUtils.chmod(0o755, src)
       FileUtils.ln_sf(src, link)
-      ok "Linked #{Color.cyan(link_name)} → #{SNAG_BIN}/"
+      ok "Linked #{Color.cyan(link_name)} → #{effective_bin}/"
     end
   else
     # Default: symlink everything in bin/
@@ -458,10 +472,10 @@ def install_resolved(name, packages, pinned_version = nil, reason = "explicit")
     if Dir.exist?(bin_dir)
       Dir.each_child(bin_dir) do |bin|
         src  = File.join(bin_dir, bin)
-        link = File.join(SNAG_BIN, bin)
+        link = File.join(effective_bin, bin)
         FileUtils.chmod(0o755, src)
         FileUtils.ln_sf(src, link)
-        ok "Linked #{Color.cyan(bin)} → #{SNAG_BIN}/"
+        ok "Linked #{Color.cyan(bin)} → #{effective_bin}/"
       end
     end
   end
@@ -488,7 +502,7 @@ def uninstall_one(name)
   if pkg && pkg["binaries"]
     pkg["binaries"].each do |b|
       link_name = File.basename(b)
-      link = File.join(SNAG_BIN, link_name)
+      link = File.join(effective_bin, link_name)
       next unless File.symlink?(link) || File.exist?(link)
       FileUtils.rm_f(link)
       ok "Removed #{link_name}"
@@ -497,7 +511,7 @@ def uninstall_one(name)
     bin_dir = File.join(dest_dir, "bin")
     if Dir.exist?(bin_dir)
       Dir.each_child(bin_dir) do |bin|
-        link = File.join(SNAG_BIN, bin)
+        link = File.join(effective_bin, bin)
         FileUtils.rm_f(link)
         ok "Removed #{bin}"
       end
@@ -528,7 +542,7 @@ def cmd_uninstall(name)
     answer = $stdin.gets&.strip&.downcase
     if %w[y yes].include?(answer)
       affected.each_key do |a|
-        FileUtils.rm_f(File.join(SNAG_BIN, a))
+        FileUtils.rm_f(File.join(effective_bin, a))
         all_aliases.delete(a)
         ok "Removed alias #{Color.cyan(a)}"
       end
@@ -576,19 +590,20 @@ def cmd_autoremove
 end
 
 def cmd_list
-  unless Dir.exist?(SNAG_CELLAR)
-    puts "Nothing installed yet. Try 'snag search' or 'snag info <package>'."
+  venv_label = active_venv ? " #{Color.dim("[venv: #{active_venv}]")}" : ""
+  unless Dir.exist?(effective_cellar)
+    puts "Nothing installed yet#{venv_label}. Try 'snag search' or 'snag info <package>'."
     return
   end
 
-  pkgs = Dir.children(SNAG_CELLAR).select { |d| Dir.exist?(File.join(SNAG_CELLAR, d)) }.sort
+  pkgs = Dir.children(effective_cellar).select { |d| Dir.exist?(File.join(effective_cellar, d)) }.sort
   if pkgs.empty?
-    puts "Nothing installed yet. Try 'snag search' or 'snag info <package>'."
+    puts "Nothing installed yet#{venv_label}. Try 'snag search' or 'snag info <package>'."
     return
   end
 
   installed = load_installed
-  puts "#{Color.bold("Installed packages:")} (#{pkgs.size} total)"
+  puts "#{Color.bold("Installed packages:")} (#{pkgs.size} total)#{venv_label}"
   puts
   pkgs.each do |name|
     v = installed_version(name)
@@ -665,12 +680,12 @@ def cmd_outdated
     return
   end
 
-  unless Dir.exist?(SNAG_CELLAR)
+  unless Dir.exist?(effective_cellar)
     puts "Nothing installed yet."
     return
   end
 
-  outdated = Dir.children(SNAG_CELLAR).sort.filter_map do |name|
+  outdated = Dir.children(effective_cellar).sort.filter_map do |name|
     next unless packages.key?(name)
     current = installed_version(name)
     latest  = packages[name]["version"]
@@ -707,7 +722,7 @@ def cmd_upgrade(name = nil)
     end
     [name]
   else
-    Dir.exist?(SNAG_CELLAR) ? Dir.children(SNAG_CELLAR).select { |d| packages.key?(d) }.sort : []
+    Dir.exist?(effective_cellar) ? Dir.children(effective_cellar).select { |d| packages.key?(d) }.sort : []
   end
 
   if targets.empty?
@@ -810,8 +825,8 @@ def cmd_update
   packages = load_registry
   upgraded = 0
 
-  if Dir.exist?(SNAG_CELLAR)
-    Dir.children(SNAG_CELLAR).sort.each do |pkg_name|
+  if Dir.exist?(effective_cellar)
+    Dir.children(effective_cellar).sort.each do |pkg_name|
       current = installed_version(pkg_name)
       next unless current
       latest = packages.dig(pkg_name, "version")
@@ -830,7 +845,7 @@ def cmd_update
   end
 
   if upgraded == 0
-    ok "All packages up to date" unless Dir.exist?(SNAG_CELLAR) && !Dir.children(SNAG_CELLAR).empty?
+    ok "All packages up to date" unless Dir.exist?(effective_cellar) && !Dir.children(effective_cellar).empty?
   else
     puts
     ok "#{upgraded} package(s) upgraded."
@@ -870,9 +885,9 @@ def cmd_cleanup(dry_run = false)
 
   # 1. Old versions in Cellar
   step "Old package versions"
-  if Dir.exist?(SNAG_CELLAR)
-    Dir.children(SNAG_CELLAR).sort.each do |pkg|
-      pkg_dir = File.join(SNAG_CELLAR, pkg)
+  if Dir.exist?(effective_cellar)
+    Dir.children(effective_cellar).sort.each do |pkg|
+      pkg_dir = File.join(effective_cellar, pkg)
       next unless Dir.exist?(pkg_dir)
       versions = Dir.children(pkg_dir).sort
       next if versions.size <= 1
@@ -899,11 +914,11 @@ def cmd_cleanup(dry_run = false)
   step "Broken symlinks"
   alias_names = load_aliases.keys
   broken = []
-  if Dir.exist?(SNAG_BIN)
-    Dir.each_child(SNAG_BIN) do |f|
+  if Dir.exist?(effective_bin)
+    Dir.each_child(effective_bin) do |f|
       next if f == "snag"
       next if alias_names.include?(f)
-      link = File.join(SNAG_BIN, f)
+      link = File.join(effective_bin, f)
       broken << f if File.symlink?(link) && !File.exist?(link)
     end
   end
@@ -913,7 +928,7 @@ def cmd_cleanup(dry_run = false)
     broken.each { |f| info "Would remove broken symlink #{Color.yellow(f)}" }
   else
     broken.each do |f|
-      FileUtils.rm_f(File.join(SNAG_BIN, f))
+      FileUtils.rm_f(File.join(effective_bin, f))
       ok "Removed broken symlink #{Color.yellow(f)}"
     end
   end
@@ -923,7 +938,7 @@ def cmd_cleanup(dry_run = false)
   step "Dangling aliases"
   all_aliases = load_aliases
   dangling = all_aliases.select { |aname, _|
-    link = File.join(SNAG_BIN, aname)
+    link = File.join(effective_bin, aname)
     File.symlink?(link) && !File.exist?(link)
   }
   if dangling.empty?
@@ -933,7 +948,7 @@ def cmd_cleanup(dry_run = false)
       if dry_run
         info "Would remove dangling alias #{Color.cyan(aname)} (was → #{data["package"]})"
       else
-        FileUtils.rm_f(File.join(SNAG_BIN, aname))
+        FileUtils.rm_f(File.join(effective_bin, aname))
         all_aliases.delete(aname)
         ok "Removed dangling alias #{Color.cyan(aname)}"
       end
@@ -1000,15 +1015,15 @@ def cmd_doctor
     [File.executable?(__FILE__), __FILE__]
   end
 
-  # ~/.snag/bin in PATH
-  check.call("~/.snag/bin is in PATH") do
-    in_path = ENV["PATH"].split(":").any? { |p| File.expand_path(p) == File.expand_path(SNAG_BIN) }
-    [in_path, in_path ? nil : "run: export PATH=\"$HOME/.snag/bin:$PATH\""]
+  # bin dir in PATH
+  check.call("#{effective_bin} is in PATH") do
+    in_path = ENV["PATH"].split(":").any? { |p| File.expand_path(p) == File.expand_path(effective_bin) }
+    [in_path, in_path ? nil : "run: export PATH=\"#{effective_bin}:$PATH\""]
   end
 
   # Cellar directory exists
   check.call("Cellar directory exists") do
-    [Dir.exist?(SNAG_CELLAR), SNAG_CELLAR]
+    [Dir.exist?(effective_cellar), effective_cellar]
   end
 
   # Registry exists and is valid
@@ -1028,21 +1043,21 @@ def cmd_doctor
   # No broken symlinks in bin (skip aliases — checked separately)
   doc_alias_names = load_aliases.keys
   broken = []
-  if Dir.exist?(SNAG_BIN)
-    Dir.each_child(SNAG_BIN) do |f|
+  if Dir.exist?(effective_bin)
+    Dir.each_child(effective_bin) do |f|
       next if f == "snag"
       next if doc_alias_names.include?(f)
-      link = File.join(SNAG_BIN, f)
+      link = File.join(effective_bin, f)
       broken << f if File.symlink?(link) && !File.exist?(link)
     end
   end
-  check.call("No broken symlinks in ~/.snag/bin") do
+  check.call("No broken symlinks in #{effective_bin}") do
     broken.empty? ? [true, nil] : [false, "broken: #{broken.join(", ")} — run 'snag uninstall' and reinstall"]
   end
 
   # No dangling aliases
   dangling_aliases = load_aliases.select { |aname, _|
-    link = File.join(SNAG_BIN, aname)
+    link = File.join(effective_bin, aname)
     File.symlink?(link) && !File.exist?(link)
   }
   check.call("No dangling aliases") do
@@ -1054,8 +1069,8 @@ def cmd_doctor
   end
 
   # Installed packages have their binaries
-  if Dir.exist?(SNAG_CELLAR)
-    Dir.each_child(SNAG_CELLAR) do |pkg|
+  if Dir.exist?(effective_cellar)
+    Dir.each_child(effective_cellar) do |pkg|
       version = installed_version(pkg)
       next unless version
       bin_dir = File.join(install_path(pkg, version), "bin")
@@ -1146,12 +1161,138 @@ def cmd_self_uninstall
   puts
 end
 
+VENV_SHELL_FN = <<~'SHELL'
+  # snag venv shell integration
+  snag() {
+    if [[ "$1" == "venv" && ( "$2" == "activate" || "$2" == "deactivate" ) ]]; then
+      eval "$(command snag "$@" --shell-eval)"
+    else
+      command snag "$@"
+    fi
+  }
+SHELL
+
+def cmd_venv(action, name = nil)
+  shell_eval = ARGV.include?("--shell-eval")
+
+  case action
+  when "new"
+    unless name
+      error "Usage: snag venv new <name>"
+      exit 1
+    end
+    venv_dir = File.join(SNAG_VENVS, name)
+    if Dir.exist?(venv_dir)
+      error "Venv '#{name}' already exists."
+      exit 1
+    end
+    FileUtils.mkdir_p(File.join(venv_dir, "bin"))
+    FileUtils.mkdir_p(File.join(venv_dir, "Cellar"))
+    File.write(File.join(venv_dir, "installed.json"), JSON.generate({}))
+    ok "Created venv '#{Color.cyan(name)}'"
+    info "Activate with: snag venv activate #{name}"
+
+  when "activate"
+    unless name
+      error "Usage: snag venv activate <name>"
+      exit 1
+    end
+    venv_dir = File.join(SNAG_VENVS, name)
+    unless Dir.exist?(venv_dir)
+      error "Venv '#{name}' does not exist. Create it with: snag venv new #{name}"
+      exit 1
+    end
+    if shell_eval
+      puts "export SNAG_VENV=#{name.shellescape}"
+      puts "export SNAG_VENV_PREV_PATH=\"$PATH\""
+      puts "export PATH=#{File.join(venv_dir, 'bin').shellescape}:\"$PATH\""
+    else
+      warn "Shell function not detected. Install it with: snag venv install-shell"
+      info "Or manually run: eval \"$(command snag venv activate #{name} --shell-eval)\""
+    end
+
+  when "deactivate"
+    if shell_eval
+      puts 'if [ -n "$SNAG_VENV_PREV_PATH" ]; then export PATH="$SNAG_VENV_PREV_PATH"; unset SNAG_VENV_PREV_PATH; fi'
+      puts "unset SNAG_VENV"
+    else
+      warn "Shell function not detected. Install it with: snag venv install-shell"
+    end
+
+  when "list", "ls"
+    ensure_dirs
+    venvs = Dir.exist?(SNAG_VENVS) ? Dir.children(SNAG_VENVS).sort : []
+    if venvs.empty?
+      info "No venvs yet. Create one with: snag venv new <name>"
+    else
+      puts "#{Color.bold("Venvs:")} (#{venvs.size} total)"
+      puts
+      venvs.each do |v|
+        if active_venv == v
+          puts "  #{Color.green("*")} #{Color.cyan(v)} #{Color.dim("(active)")}"
+        else
+          puts "    #{v}"
+        end
+      end
+      puts
+    end
+
+  when "rm", "remove"
+    unless name
+      error "Usage: snag venv rm <name>"
+      exit 1
+    end
+    venv_dir = File.join(SNAG_VENVS, name)
+    unless Dir.exist?(venv_dir)
+      error "Venv '#{name}' does not exist."
+      exit 1
+    end
+    if active_venv == name
+      error "Cannot remove the active venv. Deactivate first: snag venv deactivate"
+      exit 1
+    end
+    FileUtils.rm_rf(venv_dir)
+    ok "Removed venv '#{Color.cyan(name)}'"
+
+  when "install-shell"
+    configs = [
+      File.expand_path("~/.zshrc"),
+      File.expand_path("~/.bashrc"),
+      File.expand_path("~/.bash_profile"),
+    ].select { |f| File.exist?(f) }
+
+    if configs.empty?
+      warn "No shell config files found (~/.zshrc, ~/.bashrc, ~/.bash_profile)."
+      exit 1
+    end
+
+    configs.each do |cfg|
+      if File.read(cfg).include?("snag venv shell integration")
+        info "Already present in #{cfg}"
+      else
+        File.open(cfg, "a") { |f| f.puts("\n#{VENV_SHELL_FN}") }
+        ok "Added shell function to #{cfg}"
+      end
+    end
+    info "Restart your shell or run: source ~/.zshrc"
+
+  when nil
+    error "Usage: snag venv <new|activate|deactivate|list|rm|install-shell>"
+    exit 1
+
+  else
+    error "Unknown venv action: '#{action}'. Run 'snag help' for usage."
+    exit 1
+  end
+end
+
 def cmd_version
   puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.cyan("[#{PLATFORM}]")}"
   puts "Home     : #{SNAG_HOME}"
-  puts "Cellar   : #{SNAG_CELLAR}"
+  puts "Cellar   : #{effective_cellar}"
   puts "Binary   : #{__FILE__}"
   puts "Platform : #{PLATFORM}"
+  puts "Venv     : #{active_venv ? Color.cyan(active_venv) : Color.dim("none")}"
 end
 
 
@@ -1177,6 +1318,12 @@ def cmd_help
     ["unalias <name>",         "Remove an alias"],
     ["cleanup [--dry-run]",    "Remove old versions, broken symlinks, and temp files"],
     ["autoremove",             "Remove dependencies no longer required by any explicit package"],
+    ["venv new <name>",         "Create a new isolated environment"],
+    ["venv activate <name>",    "Activate a venv (requires shell function)"],
+    ["venv deactivate",         "Deactivate the current venv"],
+    ["venv list",               "List all venvs"],
+    ["venv rm <name>",          "Remove a venv"],
+    ["venv install-shell",      "Install shell function for transparent activation"],
     ["self-uninstall",         "Completely remove snag from this machine"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
@@ -1191,6 +1338,8 @@ def cmd_help
   puts "    snag search ip"
   puts "    snag info snagtools"
   puts "    snag update"
+  puts "    snag venv new myproject"
+  puts "    snag venv activate myproject"
   puts
 end
 
@@ -1230,6 +1379,12 @@ when "unalias"
   argument ? cmd_unalias(argument) : (error "Usage: snag unalias <name>"; exit 1)
 when "autoremove"
   cmd_autoremove
+when "venv"
+  if ARGV[1] == "-m"
+    cmd_venv("new", ARGV[2])
+  else
+    cmd_venv(ARGV[1], ARGV[2])
+  end
 when "self-uninstall", "--uninstall"
   cmd_self_uninstall
 when "version", "--version", "-v"
