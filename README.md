@@ -71,6 +71,7 @@ snag <command> [package]
 | `snag upgrade [package]` | Upgrade one package or all installed packages |
 | `snag outdated` | Show installed packages with newer versions available |
 | `snag list` | List installed packages |
+| `snag search` | List all available packages |
 | `snag search <query>` | Search packages by name or description |
 | `snag info <package>` | Show package details, version, and SHA256 |
 | `snag alias <package> <name>` | Create a short alias for an installed binary |
@@ -107,6 +108,9 @@ snagtools hex /usr/bin/ruby
 
 # Pin a specific version
 snag install snagtools@1.0.1
+
+# See all available packages
+snag search
 
 # See what's installed
 snag list

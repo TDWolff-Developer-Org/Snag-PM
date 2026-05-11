@@ -9,7 +9,7 @@ require 'uri'
 require 'tmpdir'
 require 'shellwords'
 
-SNAG_VERSION  = "1.0.7-ingrid"
+SNAG_VERSION  = "1.0.8-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -614,11 +614,17 @@ def cmd_list
   puts
 end
 
-def cmd_search(query)
+def cmd_search(query = nil)
   packages = load_registry
-  results = packages.select do |name, pkg|
-    name.downcase.include?(query.downcase) ||
-      pkg["description"].downcase.include?(query.downcase)
+  show_all = query.nil? || query == "*"
+
+  results = if show_all
+    packages
+  else
+    packages.select do |name, pkg|
+      name.downcase.include?(query.downcase) ||
+        pkg["description"].downcase.include?(query.downcase)
+    end
   end
 
   if results.empty?
@@ -626,7 +632,8 @@ def cmd_search(query)
     return
   end
 
-  puts "#{Color.bold("Search results for '#{query}':")} (#{results.size} found)"
+  header = show_all ? "All available packages:" : "Search results for '#{query}':"
+  puts "#{Color.bold(header)} (#{results.size} found)"
   puts
   results.sort_by { |k, _| k }.each do |name, pkg|
     installed = installed_version(name)
@@ -1309,7 +1316,7 @@ def cmd_help
     ["upgrade [package]",   "Upgrade one package or all installed packages"],
     ["outdated",            "Show installed packages with newer versions available"],
     ["list",                "List installed packages"],
-    ["search <query>",      "Search packages by name or description"],
+    ["search [query]",      "Search packages by name or description (omit query to list all)"],
     ["info <package>",      "Show detailed package info"],
     ["update",              "Refresh registry and self-update snag"],
     ["doctor",              "Check your snag installation for problems"],
@@ -1335,6 +1342,7 @@ def cmd_help
   puts "  #{Color.bold("Examples:")}"
   puts "    snag install myip"
   puts "    snag install snagtools"
+  puts "    snag search            # all available packages"
   puts "    snag search ip"
   puts "    snag info snagtools"
   puts "    snag update"
@@ -1358,7 +1366,7 @@ when "uninstall", "remove", "rm"
 when "list", "ls"
   cmd_list
 when "search"
-  argument ? cmd_search(argument) : (error "Usage: snag search <query>"; exit 1)
+  cmd_search(argument)
 when "info"
   argument ? cmd_info(argument) : (error "Usage: snag info <package>"; exit 1)
 when "upgrade"
