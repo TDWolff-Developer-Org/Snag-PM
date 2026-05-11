@@ -23,6 +23,7 @@ A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** a
 - SHA256 verification on every download
 - Colored output and friendly error messages
 - Self-updating via `snag update`
+- **Venvs** — isolated environments per project (`snag venv new myproject`)
 - Zero dependencies beyond Ruby's standard library
 
 ## Requirements
@@ -44,9 +45,9 @@ A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** a
 > **Note:** On minimal Linux systems, the `myip` package's Wi-Fi SSID detection requires `nmcli` (NetworkManager) or `iwgetid` (wireless-tools). Both are gracefully skipped if missing — public IP, local IPs, and DNS still work.
 
 The installer:
-1. Creates `~/.snag/` with `bin/` and `Cellar/` subdirectories
+1. Creates `~/.snag/` with `bin/`, `Cellar/`, and `venvs/` subdirectories
 2. Downloads `snag` to `~/.snag/bin/snag`
-3. Adds `~/.snag/bin` to `PATH` in your shell config
+3. Adds `~/.snag/bin` to `PATH` and installs the venv shell function in your shell config
 4. Fetches the package registry
 
 Reload your shell or run `source ~/.zshrc` (or `~/.bashrc`), then try:
@@ -77,6 +78,12 @@ snag <command> [package]
 | `snag unalias <name>` | Remove an alias |
 | `snag update` | Refresh registry, self-update snag, and upgrade installed packages |
 | `snag doctor` | Check your snag installation for problems |
+| `snag venv new <name>` | Create a new isolated environment |
+| `snag venv activate <name>` | Activate a venv (updates PATH, routes all snag commands to the venv) |
+| `snag venv deactivate` | Deactivate the current venv |
+| `snag venv list` | List all venvs |
+| `snag venv rm <name>` | Remove a venv |
+| `snag venv install-shell` | Install the venv shell function into your shell config |
 | `snag self-uninstall` | Completely remove snag from this machine (double-confirm prompt) |
 | `snag version` | Print version, platform, and paths |
 | `snag help` | Show help |
@@ -116,6 +123,13 @@ snag update
 # Remove a single package
 snag uninstall myip
 
+# Create an isolated environment for a project
+snag venv new myproject
+snag venv activate myproject
+snag install ripgrep           # installs into myproject venv only
+snag list                      # shows only myproject's packages
+snag venv deactivate           # back to global environment
+
 # Wipe snag completely (double-confirm prompt)
 snag self-uninstall
 ```
@@ -136,6 +150,11 @@ snag self-uninstall
 │       └── 1.0.1/
 │           └── bin/
 │               └── snagtools
+├── venvs/             ← isolated environments (see snag venv)
+│   └── myproject/
+│       ├── bin/       ← venv's own symlinks (prepended to PATH when active)
+│       ├── Cellar/    ← venv's own package installs
+│       └── installed.json
 └── registry.json      ← local copy of the package registry
 ```
 
