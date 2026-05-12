@@ -12,7 +12,7 @@ require 'shellwords'
 SNAG_VERSION  = "1.1.1-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
-SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
+SNAG_STORE    = File.join(SNAG_HOME, "store")
 REGISTRY_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/Formula/registry.json"
 REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
 INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
@@ -49,9 +49,9 @@ def error(msg) = puts("#{Color.red("✗")} #{msg}")
 def info(msg)  = puts("  #{msg}")
 
 def ensure_dirs
-  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR, SNAG_VENVS, SNAG_LOGS].each { |d| FileUtils.mkdir_p(d) }
+  [SNAG_HOME, SNAG_BIN, SNAG_STORE, SNAG_VENVS, SNAG_LOGS].each { |d| FileUtils.mkdir_p(d) }
   if active_venv
-    [effective_bin, effective_cellar].each { |d| FileUtils.mkdir_p(d) }
+    [effective_bin, effective_store].each { |d| FileUtils.mkdir_p(d) }
   end
 end
 
@@ -82,7 +82,7 @@ end
 
 def active_venv      = ENV["SNAG_VENV"]
 def effective_bin    = active_venv ? File.join(SNAG_VENVS, active_venv, "bin")           : SNAG_BIN
-def effective_cellar = active_venv ? File.join(SNAG_VENVS, active_venv, "Cellar")        : SNAG_CELLAR
+def effective_store = active_venv ? File.join(SNAG_VENVS, active_venv, "store")        : SNAG_STORE
 def effective_installed = active_venv ? File.join(SNAG_VENVS, active_venv, "installed.json") : INSTALLED_PATH
 
 NO_CACHE_HEADERS = { "Cache-Control" => "no-cache", "Pragma" => "no-cache" }.freeze
@@ -165,14 +165,14 @@ rescue JSON::ParserError
 end
 
 def installed_version(name)
-  dir = File.join(effective_cellar, name)
+  dir = File.join(effective_store, name)
   return nil unless Dir.exist?(dir)
   versions = Dir.children(dir).sort
   versions.last
 end
 
 def install_path(name, version)
-  File.join(effective_cellar, name, version)
+  File.join(effective_store, name, version)
 end
 
 # --- Install ledger (~/.snag/installed.json) ---
@@ -184,15 +184,15 @@ def load_installed
   JSON.parse(File.read(effective_installed)) rescue {}
 end
 
-# One-time migration: if installed.json doesn't exist yet but Cellar already
+# One-time migration: if installed.json doesn't exist yet but store already
 # has packages, mark them all as "explicit" so they're never auto-orphaned.
 # Idempotent — re-running after the file exists is a no-op.
 def migrate_installed_ledger
   return if File.exist?(INSTALLED_PATH)
-  return unless Dir.exist?(SNAG_CELLAR)
+  return unless Dir.exist?(SNAG_STORE)
   return if active_venv
   data = {}
-  Dir.children(SNAG_CELLAR).each do |pkg|
+  Dir.children(SNAG_STORE).each do |pkg|
     v = installed_version(pkg)
     next unless v
     data[pkg] = { "version" => v, "installed_as" => "explicit" }
@@ -545,7 +545,7 @@ def uninstall_one(name)
     end
   end
 
-  FileUtils.rm_rf(File.join(SNAG_CELLAR, name))
+  FileUtils.rm_rf(File.join(SNAG_STORE, name))
   unmark_installed(name)
   ok "#{Color.bold(name)} uninstalled."
   true
@@ -618,12 +618,12 @@ end
 
 def cmd_list
   venv_label = active_venv ? " #{Color.dim("[venv: #{active_venv}]")}" : ""
-  unless Dir.exist?(effective_cellar)
+  unless Dir.exist?(effective_store)
     puts "Nothing installed yet#{venv_label}. Try 'snag search' or 'snag info <package>'."
     return
   end
 
-  pkgs = Dir.children(effective_cellar).select { |d| Dir.exist?(File.join(effective_cellar, d)) }.sort
+  pkgs = Dir.children(effective_store).select { |d| Dir.exist?(File.join(effective_store, d)) }.sort
   if pkgs.empty?
     puts "Nothing installed yet#{venv_label}. Try 'snag search' or 'snag info <package>'."
     return
@@ -716,12 +716,12 @@ def cmd_outdated
     return
   end
 
-  unless Dir.exist?(effective_cellar)
+  unless Dir.exist?(effective_store)
     puts "Nothing installed yet."
     return
   end
 
-  outdated = Dir.children(effective_cellar).sort.filter_map do |name|
+  outdated = Dir.children(effective_store).sort.filter_map do |name|
     next unless packages.key?(name)
     current = installed_version(name)
     latest  = packages[name]["version"]
@@ -758,7 +758,7 @@ def cmd_upgrade(name = nil)
     end
     [name]
   else
-    Dir.exist?(effective_cellar) ? Dir.children(effective_cellar).select { |d| packages.key?(d) }.sort : []
+    Dir.exist?(effective_store) ? Dir.children(effective_store).select { |d| packages.key?(d) }.sort : []
   end
 
   if targets.empty?
@@ -872,8 +872,8 @@ def cmd_update
   packages = load_registry
   upgraded = 0
 
-  if Dir.exist?(effective_cellar)
-    Dir.children(effective_cellar).sort.each do |pkg_name|
+  if Dir.exist?(effective_store)
+    Dir.children(effective_store).sort.each do |pkg_name|
       current = installed_version(pkg_name)
       next unless current
       latest = packages.dig(pkg_name, "version")
@@ -892,7 +892,7 @@ def cmd_update
   end
 
   if upgraded == 0
-    ok "All packages up to date" unless Dir.exist?(effective_cellar) && !Dir.children(effective_cellar).empty?
+    ok "All packages up to date" unless Dir.exist?(effective_store) && !Dir.children(effective_store).empty?
   else
     puts
     ok "#{upgraded} package(s) upgraded."
@@ -930,11 +930,11 @@ def cmd_cleanup(dry_run = false)
   total_freed = 0
   removed_versions = 0
 
-  # 1. Old versions in Cellar
+  # 1. Old versions in store
   step "Old package versions"
-  if Dir.exist?(effective_cellar)
-    Dir.children(effective_cellar).sort.each do |pkg|
-      pkg_dir = File.join(effective_cellar, pkg)
+  if Dir.exist?(effective_store)
+    Dir.children(effective_store).sort.each do |pkg|
+      pkg_dir = File.join(effective_store, pkg)
       next unless Dir.exist?(pkg_dir)
       versions = Dir.children(pkg_dir).sort
       next if versions.size <= 1
@@ -1088,9 +1088,9 @@ def cmd_doctor
     [in_path, in_path ? nil : "run: export PATH=\"#{effective_bin}:$PATH\""]
   end
 
-  # Cellar directory exists
-  check.call("Cellar directory exists") do
-    [Dir.exist?(effective_cellar), effective_cellar]
+  # Store directory exists
+  check.call("Store directory exists") do
+    [Dir.exist?(effective_store), effective_store]
   end
 
   # Registry exists and is valid
@@ -1136,8 +1136,8 @@ def cmd_doctor
   end
 
   # Installed packages have their binaries
-  if Dir.exist?(effective_cellar)
-    Dir.each_child(effective_cellar) do |pkg|
+  if Dir.exist?(effective_store)
+    Dir.each_child(effective_store) do |pkg|
       version = installed_version(pkg)
       next unless version
       bin_dir = File.join(install_path(pkg, version), "bin")
@@ -1254,7 +1254,7 @@ def cmd_venv(action, name = nil)
       exit 1
     end
     FileUtils.mkdir_p(File.join(venv_dir, "bin"))
-    FileUtils.mkdir_p(File.join(venv_dir, "Cellar"))
+    FileUtils.mkdir_p(File.join(venv_dir, "store"))
     File.write(File.join(venv_dir, "installed.json"), JSON.generate({}))
     ok "Created venv '#{Color.cyan(name)}'"
     info "Activate with: snag venv activate #{name}"
@@ -1369,7 +1369,8 @@ def cmd_logs
   puts "  #{Color.dim(SNAG_LOGS)}"
   puts
   logs.each do |path|
-    size = format_bytes(File.size(path) rescue 0)
+    raw_size = File.size(path) rescue 0
+    size = format_bytes(raw_size)
     puts "  #{Color.cyan(File.basename(path))}  #{Color.dim(size)}"
   end
   puts
@@ -1380,7 +1381,7 @@ end
 def cmd_version
   puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.dim("+#{SNAG_CONTENT_HASH[0..6]}")} #{Color.cyan("[#{PLATFORM}]")}"
   puts "Home     : #{SNAG_HOME}"
-  puts "Cellar   : #{effective_cellar}"
+  puts "Store    : #{effective_store}"
   puts "Binary   : #{__FILE__}"
   puts "Platform : #{PLATFORM}"
   puts "Venv     : #{active_venv ? Color.cyan(active_venv) : Color.dim("none")}"
