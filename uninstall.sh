@@ -43,26 +43,33 @@ fi
 
 remove_from_rc() {
   local rc_file="$1"
-  if [ -f "${rc_file}" ] && grep -q '\.snag/bin' "${rc_file}" 2>/dev/null; then
-    local tmp="${rc_file}.snag.tmp"
+  [ -f "${rc_file}" ] || return
+  local tmp="${rc_file}.snag.tmp"
+  local changed=0
+
+  # Remove single-line PATH entries
+  if grep -q '\.snag/bin\|# Snag package manager' "${rc_file}" 2>/dev/null; then
     grep -v -e '# Snag package manager' -e '\.snag/bin' "${rc_file}" > "${tmp}"
     mv "${tmp}" "${rc_file}"
-    ok "Removed PATH entry from ${rc_file}"
+    changed=1
   fi
+
+  # Remove multi-line venv shell function block
+  if grep -q 'snag venv shell integration' "${rc_file}" 2>/dev/null; then
+    awk '/# snag venv shell integration/{skip=1} skip && /^\}/{skip=0; next} !skip{print}' \
+      "${rc_file}" > "${tmp}"
+    mv "${tmp}" "${rc_file}"
+    changed=1
+  fi
+
+  [ "${changed}" -eq 1 ] && ok "Cleaned snag entries from ${rc_file}"
 }
 
 step "Cleaning up shell config"
 remove_from_rc "${HOME}/.zshrc"
 remove_from_rc "${HOME}/.bashrc"
 remove_from_rc "${HOME}/.bash_profile"
-
-FISH_CONFIG="${HOME}/.config/fish/config.fish"
-if [ -f "${FISH_CONFIG}" ] && grep -q '\.snag/bin' "${FISH_CONFIG}" 2>/dev/null; then
-  tmp="${FISH_CONFIG}.snag.tmp"
-  grep -v '\.snag/bin' "${FISH_CONFIG}" > "${tmp}"
-  mv "${tmp}" "${FISH_CONFIG}"
-  ok "Removed PATH entry from ${FISH_CONFIG}"
-fi
+remove_from_rc "${HOME}/.config/fish/config.fish"
 
 # ── Done ───────────────────────────────────────────────────────────────────────
 

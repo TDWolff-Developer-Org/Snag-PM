@@ -1215,6 +1215,8 @@ def cmd_self_uninstall
     new_content = content.lines.reject { |l|
       l.include?(".snag/bin") || l.strip == "# Snag package manager"
     }.join
+    # Remove the multi-line venv shell function block
+    new_content.gsub!(/\n?# snag venv shell integration\nsnag\(\) \{.*?\n\}\n?/m, "\n")
     new_content = new_content.gsub(/\n{3,}/, "\n\n")
     if content != new_content
       File.write(rc, new_content)

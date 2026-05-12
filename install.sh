@@ -17,7 +17,7 @@ error() { echo -e "${RED}✗${RESET} ${1}"; exit 1; }
 
 SNAG_HOME="${HOME}/.snag"
 SNAG_BIN="${SNAG_HOME}/bin"
-SNAG_CELLAR="${SNAG_HOME}/Cellar"
+SNAG_STORE="${SNAG_HOME}/store"
 SNAG_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
 REGISTRY_URL="https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/Formula/registry.json"
 
@@ -44,7 +44,7 @@ ok "curl found"
 # ── Directories ────────────────────────────────────────────────────────────────
 
 step "Setting up ~/.snag directory structure"
-mkdir -p "${SNAG_BIN}" "${SNAG_CELLAR}"
+mkdir -p "${SNAG_BIN}" "${SNAG_STORE}"
 ok "Created ${SNAG_HOME}"
 
 # ── Download snag binary ───────────────────────────────────────────────────────
