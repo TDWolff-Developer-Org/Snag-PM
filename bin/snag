@@ -9,7 +9,7 @@ require 'uri'
 require 'tmpdir'
 require 'shellwords'
 
-SNAG_VERSION  = "1.1.0-ingrid"
+SNAG_VERSION  = "1.1.1-ingrid"
 SNAG_HOME     = File.expand_path("~/.snag")
 SNAG_BIN      = File.join(SNAG_HOME, "bin")
 SNAG_CELLAR   = File.join(SNAG_HOME, "Cellar")
@@ -18,6 +18,7 @@ REGISTRY_PATH = File.join(SNAG_HOME, "registry.json")
 INSTALLED_PATH = File.join(SNAG_HOME, "installed.json")
 ALIASES_PATH   = File.join(SNAG_HOME, "aliases.json")
 SNAG_VENVS     = File.join(SNAG_HOME, "venvs").freeze
+SNAG_LOGS      = File.join(SNAG_HOME, "logs").freeze
 SNAG_RAW_URL  = "https://raw.githubusercontent.com/TDWolff-Developer-Org/Snag/refs/heads/latest/bin/snag"
 SNAG_CONTENT_HASH = Digest::SHA256.file(__FILE__).hexdigest.freeze
 
@@ -48,10 +49,35 @@ def error(msg) = puts("#{Color.red("✗")} #{msg}")
 def info(msg)  = puts("  #{msg}")
 
 def ensure_dirs
-  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR, SNAG_VENVS].each { |d| FileUtils.mkdir_p(d) }
+  [SNAG_HOME, SNAG_BIN, SNAG_CELLAR, SNAG_VENVS, SNAG_LOGS].each { |d| FileUtils.mkdir_p(d) }
   if active_venv
     [effective_bin, effective_cellar].each { |d| FileUtils.mkdir_p(d) }
   end
+end
+
+def write_crash_log(e)
+  FileUtils.mkdir_p(SNAG_LOGS)
+  timestamp = Time.now.strftime("%Y-%m-%dT%H-%M-%S")
+  path = File.join(SNAG_LOGS, "crash-#{timestamp}.log")
+  content = <<~LOG
+    Snag Crash Report
+    =================
+    Date     : #{Time.now.utc}
+    Version  : #{SNAG_VERSION} +#{SNAG_CONTENT_HASH[0..6]}
+    Platform : #{PLATFORM}
+    Command  : snag #{ARGV.join(" ")}
+    Ruby     : #{RUBY_VERSION}
+
+    Exception: #{e.class}
+    Message  : #{e.message}
+
+    Backtrace:
+    #{e.backtrace&.map { |l| "  #{l}" }&.join("\n")}
+  LOG
+  File.write(path, content)
+  path
+rescue
+  nil
 end
 
 def active_venv      = ENV["SNAG_VENV"]
@@ -996,6 +1022,26 @@ def cmd_cleanup(dry_run = false)
     end
   end
 
+  # 5. Old crash logs (keep newest 10)
+  puts
+  step "Crash logs"
+  crash_logs = Dir.glob(File.join(SNAG_LOGS, "crash-*.log")).sort
+  old_logs   = crash_logs.size > 10 ? crash_logs[0..-(11)] : []
+  if old_logs.empty?
+    ok "No old crash logs (#{crash_logs.size} kept)"
+  else
+    old_logs.each do |f|
+      size = File.size(f) rescue 0
+      total_freed += size
+      if dry_run
+        info "Would remove #{File.basename(f)} (#{format_bytes(size)})"
+      else
+        FileUtils.rm_f(f)
+        ok "Removed #{File.basename(f)} (#{format_bytes(size)})"
+      end
+    end
+  end
+
   puts
   if dry_run
     info "Dry run — nothing was removed."
@@ -1307,6 +1353,30 @@ def cmd_venv(action, name = nil)
   end
 end
 
+def cmd_logs
+  unless Dir.exist?(SNAG_LOGS)
+    ok "No crash logs found."
+    return
+  end
+
+  logs = Dir.glob(File.join(SNAG_LOGS, "crash-*.log")).sort.reverse
+  if logs.empty?
+    ok "No crash logs found."
+    return
+  end
+
+  puts "#{Color.bold("Crash logs:")} (#{logs.size} total)"
+  puts "  #{Color.dim(SNAG_LOGS)}"
+  puts
+  logs.each do |path|
+    size = format_bytes(File.size(path) rescue 0)
+    puts "  #{Color.cyan(File.basename(path))}  #{Color.dim(size)}"
+  end
+  puts
+  info "View a report: #{Color.cyan("cat #{SNAG_LOGS}/crash-<name>.log")}"
+  info "Clear all logs: #{Color.cyan("snag cleanup")}"
+end
+
 def cmd_version
   puts "#{Color.bold("snag")} #{SNAG_VERSION} #{Color.dim("+#{SNAG_CONTENT_HASH[0..6]}")} #{Color.cyan("[#{PLATFORM}]")}"
   puts "Home     : #{SNAG_HOME}"
@@ -1348,6 +1418,7 @@ def cmd_help
     ["venv rm <name>",          "Remove a venv"],
     ["venv install-shell",      "Install shell function for transparent activation"],
     ["self-uninstall",         "Completely remove snag from this machine"],
+    ["logs",               "List crash reports in ~/.snag/logs/"],
     ["version",             "Print version info"],
     ["help",                "Show this message"],
   ]
@@ -1369,53 +1440,63 @@ end
 
 # --- Entry point ---
 
-migrate_installed_ledger
+begin
+  migrate_installed_ledger
 
-command  = ARGV[0]
-argument = ARGV[1]
+  command  = ARGV[0]
+  argument = ARGV[1]
 
-case command
-when "install"
-  argument ? cmd_install(argument) : (error "Usage: snag install <package>"; exit 1)
-when "uninstall", "remove", "rm"
-  argument ? cmd_uninstall(argument) : (error "Usage: snag uninstall <package>"; exit 1)
-when "list", "ls"
-  cmd_list
-when "search"
-  cmd_search(argument)
-when "info"
-  argument ? cmd_info(argument) : (error "Usage: snag info <package>"; exit 1)
-when "upgrade"
-  cmd_upgrade(argument)
-when "outdated"
-  cmd_outdated
-when "update"
-  cmd_update
-when "doctor"
-  cmd_doctor
-when "cleanup"
-  cmd_cleanup(argument == "--dry-run")
-when "alias"
-  cmd_alias(argument, ARGV[2])
-when "aliases"
-  cmd_aliases
-when "unalias"
-  argument ? cmd_unalias(argument) : (error "Usage: snag unalias <name>"; exit 1)
-when "autoremove"
-  cmd_autoremove
-when "venv"
-  if ARGV[1] == "-m"
-    cmd_venv("new", ARGV[2])
+  case command
+  when "install"
+    argument ? cmd_install(argument) : (error "Usage: snag install <package>"; exit 1)
+  when "uninstall", "remove", "rm"
+    argument ? cmd_uninstall(argument) : (error "Usage: snag uninstall <package>"; exit 1)
+  when "list", "ls"
+    cmd_list
+  when "search"
+    cmd_search(argument)
+  when "info"
+    argument ? cmd_info(argument) : (error "Usage: snag info <package>"; exit 1)
+  when "upgrade"
+    cmd_upgrade(argument)
+  when "outdated"
+    cmd_outdated
+  when "update"
+    cmd_update
+  when "doctor"
+    cmd_doctor
+  when "cleanup"
+    cmd_cleanup(argument == "--dry-run")
+  when "alias"
+    cmd_alias(argument, ARGV[2])
+  when "aliases"
+    cmd_aliases
+  when "unalias"
+    argument ? cmd_unalias(argument) : (error "Usage: snag unalias <name>"; exit 1)
+  when "autoremove"
+    cmd_autoremove
+  when "venv"
+    if ARGV[1] == "-m"
+      cmd_venv("new", ARGV[2])
+    else
+      cmd_venv(ARGV[1], ARGV[2])
+    end
+  when "self-uninstall", "--uninstall"
+    cmd_self_uninstall
+  when "logs"
+    cmd_logs
+  when "version", "--version", "-v"
+    cmd_version
+  when "help", "--help", "-h", nil
+    cmd_help
   else
-    cmd_venv(ARGV[1], ARGV[2])
+    error "Unknown command: '#{command}'. Run 'snag help' for usage."
+    exit 1
   end
-when "self-uninstall", "--uninstall"
-  cmd_self_uninstall
-when "version", "--version", "-v"
-  cmd_version
-when "help", "--help", "-h", nil
-  cmd_help
-else
-  error "Unknown command: '#{command}'. Run 'snag help' for usage."
+rescue => e
+  error "snag crashed: #{e.message}"
+  log_path = write_crash_log(e)
+  info "Crash report saved to: #{log_path}" if log_path
+  info "Run 'snag logs' to list all crash reports."
   exit 1
 end
