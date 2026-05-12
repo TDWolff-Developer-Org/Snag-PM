@@ -17,7 +17,7 @@ A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** a
 
 ## Features
 
-- Installs packages to `~/.snag/Cellar/` (same layout as Homebrew)
+- Installs packages to `~/.snag/store/`
 - Symlinks executables to `~/.snag/bin/`
 - Downloads packages from GitHub Releases
 - SHA256 verification on every download
@@ -45,7 +45,7 @@ A simple, Homebrew-inspired package manager written in Ruby. Runs on **macOS** a
 > **Note:** On minimal Linux systems, the `myip` package's Wi-Fi SSID detection requires `nmcli` (NetworkManager) or `iwgetid` (wireless-tools). Both are gracefully skipped if missing — public IP, local IPs, and DNS still work.
 
 The installer:
-1. Creates `~/.snag/` with `bin/`, `Cellar/`, and `venvs/` subdirectories
+1. Creates `~/.snag/` with `bin/`, `store/`, and `venvs/` subdirectories
 2. Downloads `snag` to `~/.snag/bin/snag`
 3. Adds `~/.snag/bin` to `PATH` and installs the venv shell function in your shell config
 4. Fetches the package registry
@@ -85,6 +85,7 @@ snag <command> [package]
 | `snag venv list` | List all venvs |
 | `snag venv rm <name>` | Remove a venv |
 | `snag venv install-shell` | Install the venv shell function into your shell config |
+| `snag logs` | List crash reports in `~/.snag/logs/` |
 | `snag self-uninstall` | Completely remove snag from this machine (double-confirm prompt) |
 | `snag version` | Print version, platform, and paths |
 | `snag help` | Show help |
@@ -145,7 +146,7 @@ snag self-uninstall
 ```
 ~/.snag/
 ├── bin/               ← symlinks to installed executables (add to PATH)
-├── Cellar/
+├── store/
 │   ├── myip/
 │   │   └── 1.0.1/
 │   │       └── bin/
@@ -157,7 +158,7 @@ snag self-uninstall
 ├── venvs/             ← isolated environments (see snag venv)
 │   └── myproject/
 │       ├── bin/       ← venv's own symlinks (prepended to PATH when active)
-│       ├── Cellar/    ← venv's own package installs
+│       ├── store/     ← venv's own package installs
 │       └── installed.json
 └── registry.json      ← local copy of the package registry
 ```
@@ -173,7 +174,7 @@ myip-1.0.1/
 ```
 
 `snag install` downloads the archive, verifies the SHA256, extracts it to
-`~/.snag/Cellar/<name>/<version>/`, then symlinks every file in `bin/` to
+`~/.snag/store/<name>/<version>/`, then symlinks every file in `bin/` to
 `~/.snag/bin/`.
 
 ### Registry
