@@ -1,7 +1,7 @@
 {
   "version": "1",
   "snag_version": "1.1.1-ingrid",
-  "snag_sha256": "7a49f05da4840e62e3402322690b0485a45342c9f3708e1823e024919a7c6740",
+  "snag_sha256": "9eb14eefbcbe579e88c6c1987afdb32344189131b22c5fdc95b68f5edd966906",
   "updated": "2026-05-11",
   "packages": {
     "myip": {
